@@ -1,0 +1,822 @@
+<!doctype html>
+<html lang="id" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Dokumentasi teknis Sevenlead: arsitektur, alur bisnis, WhatsApp, Instagram/Meta, worker, API, dan migrasi multi-tenant." />
+  <title>Sevenlead Engineering Handbook</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07111f; --panel: #0d1a2b; --panel-2: #122238; --line: #223653;
+      --text: #e8f0fb; --muted: #9fb0c7; --brand: #54d6b5; --brand-2: #69a8ff;
+      --warn: #ffc96b; --danger: #ff7d8f; --ok: #6ee7ad; --code: #07101b;
+      --shadow: 0 18px 50px rgba(0,0,0,.24); --radius: 18px;
+    }
+    html[data-theme="light"] {
+      color-scheme: light;
+      --bg: #f4f7fb; --panel: #ffffff; --panel-2: #eef4fa; --line: #d9e3ef;
+      --text: #142033; --muted: #5d6d82; --brand: #087f68; --brand-2: #1769c2;
+      --warn: #a85c00; --danger: #c7334d; --ok: #137a4b; --code: #eef3f8;
+      --shadow: 0 18px 45px rgba(33,52,82,.10);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 28px; }
+    body { margin: 0; overflow-x: hidden; background: var(--bg); color: var(--text); font: 15px/1.68 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    a { color: var(--brand-2); text-decoration: none; }
+    button, input, select { font: inherit; }
+    code { font-family: "Cascadia Code", Consolas, monospace; }
+    .shell { display: grid; grid-template-columns: 290px minmax(0,1fr); min-height: 100vh; }
+    aside { position: sticky; top: 0; height: 100vh; overflow: auto; border-right: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 93%, transparent); padding: 22px 18px; }
+    .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .logo { width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center; background: linear-gradient(135deg,var(--brand),var(--brand-2)); color: #06111d; font-weight: 900; }
+    .brand strong { display:block; font-size: 16px; }.brand small { color:var(--muted); }
+    .search { width:100%; border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:var(--panel-2); color:var(--text); outline:none; }
+    .search:focus { border-color:var(--brand); box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 18%,transparent); }
+    nav { margin-top:18px; display:grid; gap:3px; }
+    nav a { color:var(--muted); padding:7px 10px; border-radius:9px; font-size:13px; }
+    nav a:hover, nav a.active { color:var(--text); background:var(--panel-2); }
+    .side-actions { display:flex; gap:8px; margin-top:18px; }
+    .icon-btn { border:1px solid var(--line); background:var(--panel-2); color:var(--text); border-radius:10px; padding:8px 10px; cursor:pointer; }
+    main { min-width:0; padding:36px clamp(22px,4vw,68px) 90px; }
+    .content, section, .card, .hero { min-width:0; }
+    .content { width:100%; max-width:1180px; margin:auto; }
+    .hero { padding:42px; border:1px solid var(--line); border-radius:28px; background:radial-gradient(circle at 85% 15%,color-mix(in srgb,var(--brand-2) 20%,transparent),transparent 34%),linear-gradient(145deg,var(--panel),var(--panel-2)); box-shadow:var(--shadow); }
+    .eyebrow { color:var(--brand); text-transform:uppercase; letter-spacing:.14em; font-weight:800; font-size:12px; }
+    h1 { overflow-wrap:anywhere; font-size:clamp(34px,5vw,62px); line-height:1.02; margin:12px 0 18px; letter-spacing:-.045em; max-width:820px; }
+    h2 { font-size:30px; line-height:1.2; margin:0 0 18px; letter-spacing:-.025em; }
+    h3 { font-size:20px; margin:25px 0 10px; } h4 { font-size:16px; margin:20px 0 7px; }
+    p { margin:8px 0 14px; } .lead { color:var(--muted); font-size:17px; max-width:850px; }
+    .meta { display:flex; flex-wrap:wrap; gap:9px; margin-top:24px; }
+    .pill,.badge { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:999px; padding:5px 10px; color:var(--muted); font-size:12px; background:color-mix(in srgb,var(--panel-2) 80%,transparent); }
+    .badge.ok { color:var(--ok); }.badge.warn { color:var(--warn); }.badge.danger { color:var(--danger); }.badge.info { color:var(--brand-2); }
+    section { padding-top:72px; }
+    .section-intro { color:var(--muted); max-width:900px; margin-bottom:22px; }
+    .grid { display:grid; gap:16px; }.grid.two { grid-template-columns:repeat(2,minmax(0,1fr)); }.grid.three { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    .card { border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); padding:20px; box-shadow:0 8px 30px rgba(0,0,0,.07); }
+    .card h3,.card h4 { margin-top:0; }.card p:last-child { margin-bottom:0; }
+    .kpi { font-size:28px; font-weight:850; color:var(--brand); line-height:1; margin-bottom:9px; }
+    .muted { color:var(--muted); }.small { font-size:13px; }.strong { color:var(--text); font-weight:700; }
+    .callout { border-left:4px solid var(--brand-2); background:var(--panel-2); padding:14px 17px; border-radius:0 12px 12px 0; margin:16px 0; }
+    .callout.warning { border-color:var(--warn); }.callout.danger { border-color:var(--danger); }.callout.ok { border-color:var(--ok); }
+    ul,ol { padding-left:21px; } li { margin:5px 0; } ul.clean { list-style:none; padding:0; }
+    pre { position:relative; overflow:auto; background:var(--code); color:var(--text); border:1px solid var(--line); border-radius:14px; padding:17px; line-height:1.55; }
+    .copy { position:absolute; top:8px; right:8px; border:1px solid var(--line); border-radius:8px; background:var(--panel-2); color:var(--muted); padding:5px 9px; cursor:pointer; font-size:11px; }
+    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:15px; background:var(--panel); }
+    table { width:100%; border-collapse:collapse; min-width:720px; }
+    th,td { text-align:left; vertical-align:top; border-bottom:1px solid var(--line); padding:12px 14px; }
+    th { position:sticky; top:0; background:var(--panel-2); color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.06em; }
+    tr:last-child td { border-bottom:0; } td code { color:var(--brand); }
+    .diagram { overflow:auto; border:1px solid var(--line); border-radius:20px; background:linear-gradient(145deg,var(--panel),var(--panel-2)); padding:24px; }
+    .flow { min-width:850px; display:flex; align-items:stretch; gap:12px; }
+    .node { flex:1; min-width:130px; padding:14px; border:1px solid var(--line); border-radius:13px; background:var(--panel); text-align:center; }
+    .node b { display:block; color:var(--brand); }.arrow { display:grid; place-items:center; color:var(--brand-2); font-size:22px; }
+    .layers { display:grid; gap:10px; }.layer { border:1px solid var(--line); border-radius:13px; padding:13px 16px; background:var(--panel); }.layer b { color:var(--brand); }
+    .tree { font-family:"Cascadia Code",Consolas,monospace; font-size:13px; white-space:pre; overflow:auto; color:var(--muted); }
+    details { border:1px solid var(--line); background:var(--panel); border-radius:14px; padding:0 16px; margin:10px 0; }
+    summary { cursor:pointer; font-weight:750; padding:14px 0; color:var(--text); } details > div { padding:0 0 16px; }
+    .endpoint-toolbar { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0; }
+    .filter { cursor:pointer; border:1px solid var(--line); border-radius:999px; background:var(--panel); color:var(--muted); padding:6px 11px; }.filter.active { color:#06111d; background:var(--brand); border-color:var(--brand); }
+    .method { font-weight:850; font-size:11px; letter-spacing:.04em; }.get{color:#69a8ff}.post{color:#6ee7ad}.patch{color:#ffc96b}.delete{color:#ff7d8f}
+    .risk { display:grid; grid-template-columns:90px 1fr 1.2fr; gap:12px; align-items:start; border-bottom:1px solid var(--line); padding:14px 0; }.risk:last-child{border:0}.risk .sev{font-weight:850}
+    .critical{color:var(--danger)}.high{color:var(--warn)}.medium{color:var(--brand-2)}
+    .timeline { border-left:2px solid var(--line); margin-left:10px; padding-left:23px; }.step { position:relative; margin:0 0 22px; }.step:before { content:""; position:absolute; left:-30px; top:6px; width:12px; height:12px; border-radius:50%; background:var(--brand); box-shadow:0 0 0 5px var(--panel-2); }
+    .hidden-by-search { display:none !important; }.mobile-top { display:none; }
+    footer { color:var(--muted); border-top:1px solid var(--line); margin-top:70px; padding-top:24px; }
+    @media(max-width:980px){.shell{display:block}aside{position:fixed;z-index:20;left:-310px;width:290px;transition:.2s}.shell.menu-open aside{left:0;box-shadow:var(--shadow)}main{width:100%;max-width:100vw;overflow:hidden;padding-top:75px}.mobile-top{position:fixed;display:flex;z-index:15;left:0;right:0;top:0;width:100vw;padding:12px 18px;justify-content:space-between;background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}.grid.three,.grid.two{grid-template-columns:minmax(0,1fr)}.hero{max-width:100%;padding:28px}.lead,.card p,.card li{overflow-wrap:anywhere}.risk{grid-template-columns:1fr}.flow{min-width:730px}}
+    @media print { aside,.mobile-top,.copy,.endpoint-toolbar{display:none!important}.shell{display:block}main{padding:0}.hero,.card,.diagram,.table-wrap{box-shadow:none;break-inside:avoid}section{padding-top:35px}body{font-size:11px} }
+  </style>
+</head>
+<body>
+<div class="mobile-top"><button class="icon-btn" id="menuButton">☰ Menu</button><button class="icon-btn theme-toggle">◐ Tema</button></div>
+<div class="shell" id="shell">
+  <aside>
+    <div class="brand"><div class="logo">7L</div><div><strong>Sevenlead</strong><small>Engineering Handbook</small></div></div>
+    <input class="search" id="search" type="search" placeholder="Cari topik, endpoint, worker…" aria-label="Cari dokumentasi" />
+    <nav id="nav">
+      <a href="#overview">01 · Ringkasan</a><a href="#system-design">02 · Desain sistem</a><a href="#architecture">03 · Arsitektur & repo</a>
+      <a href="#business-flow">04 · Alur bisnis</a><a href="#access-modes">05 · Regular & agency</a><a href="#instagram-meta">06 · Instagram & Meta</a>
+      <a href="#whatsapp">07 · WhatsApp service</a><a href="#workers">08 · Worker & job loop</a><a href="#blast">09 · Blast end-to-end</a>
+      <a href="#api">10 · Endpoint utama</a><a href="#data">11 · Data & multi-tenant</a><a href="#migration-dev">12 · Migrasi development</a>
+      <a href="#migration-prod">13 · Migrasi production</a><a href="#external-api">14 · External API</a><a href="#operations">15 · Operasional</a>
+      <a href="#attention">16 · Hal penting</a><a href="#sources">17 · Sumber kode</a>
+    </nav>
+    <div class="side-actions"><button class="icon-btn theme-toggle">◐ Tema</button><button class="icon-btn" onclick="window.print()">↗ Cetak</button></div>
+  </aside>
+  <main><div class="content">
+    <header class="hero" id="overview" data-searchable>
+      <div class="eyebrow">Living technical documentation · code-verified</div>
+      <h1>Sevenlead, dari login hingga pesan WhatsApp dan Instagram terkirim.</h1>
+      <p class="lead">Panduan teknis end-to-end untuk aplikasi utama, database multi-tenant, WhatsApp runtime, integrasi Instagram/Meta, realtime transport, worker bisnis, external API, dan runbook migrasi production.</p>
+      <div class="meta"><span class="pill">Next.js 16 + React 19</span><span class="pill">Prisma 6 + PostgreSQL</span><span class="pill">Express + whatsapp-web.js</span><span class="pill">Socket.IO</span><span class="pill">Diverifikasi 6 Juli 2026</span></div>
+    </header>
+
+    <section data-searchable>
+      <div class="grid three">
+        <div class="card"><div class="kpi">2 + 1</div><div class="strong">Repository/service boundary</div><p class="muted small">Sevenlead, WA service terpisah, dan realtime socket service di dalam repo utama.</p></div>
+        <div class="card"><div class="kpi">2-tier DB</div><div class="strong">Central + database per tenant</div><p class="muted small">Registry dan dispatcher global di central; data bisnis tetap terisolasi di tenant DB.</p></div>
+        <div class="card"><div class="kpi">7 worker</div><div class="strong">Loop bisnis eksplisit</div><p class="muted small">Blast, sequence, validator, admin notification, admin broadcast, timeout, subscription access.</p></div>
+      </div>
+      <div class="callout warning"><strong>Status dokumen.</strong> Label <span class="badge ok">Implemented</span> berarti terlihat di kode. <span class="badge warn">Operational rule</span> berarti prosedur yang harus diikuti. <span class="badge danger">Production gap</span> berarti rekomendasi yang belum sepenuhnya diimplementasikan.</div>
+    </section>
+
+    <section id="system-design" data-searchable>
+      <div class="eyebrow">02 · System design</div><h2>Desain sistem dan boundary</h2>
+      <p class="section-intro">Sevenlead adalah aplikasi tunggal dengan isolasi database per workspace. Aplikasi utama menjadi source of truth business state; WA service mengelola browser/session WhatsApp; socket service hanya mengangkut event realtime.</p>
+      <div class="diagram"><div class="flow">
+        <div class="node"><b>Browser</b>Next.js UI<br/>JWT cookie</div><div class="arrow">→</div>
+        <div class="node"><b>Sevenlead</b>Routes → services<br/>port 3019</div><div class="arrow">↔</div>
+        <div class="node"><b>Central DB</b>tenant registry<br/>global job pointers</div><div class="arrow">↔</div>
+        <div class="node"><b>Tenant DB</b>CRM + blast + bot<br/>per workspace</div>
+      </div><div class="flow" style="margin-top:12px">
+        <div class="node"><b>Membership/Auth</b>login, plan, quota<br/>tenant provisioning</div><div class="arrow">↔</div>
+        <div class="node"><b>Sevenlead</b>scope & orchestration<br/>source of truth</div><div class="arrow">↔</div>
+        <div class="node"><b>WA Service</b>LocalAuth + Chromium<br/>port 3001(dev) 3022(prod)</div><div class="arrow">↔</div>
+        <div class="node"><b>WhatsApp Web</b>messages, ACK<br/>contacts & groups</div>
+      </div><div class="flow" style="margin-top:12px">
+        <div class="node"><b>Domain services</b>persist state first</div><div class="arrow">→</div>
+        <div class="node"><b>Realtime publisher</b>internal API key</div><div class="arrow">→</div>
+        <div class="node"><b>Socket service</b>signed short token<br/>scoped rooms</div><div class="arrow">→</div>
+        <div class="node"><b>Browser subscribers</b>workspace/license/admin</div>
+      </div></div>
+      <div class="grid two" style="margin-top:16px">
+        <div class="card"><h3>Source of truth</h3><ul><li><strong>Central DB:</strong> tenant connection registry, instance mapping/runtime snapshot, API credentials, global queues, admin domain.</li><li><strong>Tenant DB:</strong> instances, contacts, lists, chat, bots, sequences, blast, validator, attachment.</li><li><strong>WA disk:</strong> LocalAuth session dan tracker ACK sementara—bukan business source of truth.</li></ul></div>
+        <div class="card"><h3>Trust boundaries</h3><ul><li>User route: JWT dalam cookie <code>httpOnly</code>.</li><li>Sevenlead ↔ WA: <code>x-api-key</code>.</li><li>Sevenlead ↔ socket: <code>x-api-key</code>; browser memakai JWT realtime.</li><li>External instance API: Bearer key per instance.</li><li>Membership provisioning: Bearer secret terpisah.</li></ul></div>
+      </div>
+      <h3>Alur database produk KelolaPesan</h3>
+      <p class="section-intro">KelolaPesan berjalan sebagai produk multi-tenant: Membership menentukan lisensi dan paket, Sevenlead membuat registry koneksi di central DB, lalu semua data operasional user disimpan di database tenant milik workspace tersebut.</p>
+      <div class="diagram"><div class="flow">
+        <div class="node"><b>Membership order</b>tenantId + license<br/>productCode KelolaPesan</div><div class="arrow">→</div>
+        <div class="node"><b>create_db</b>buat DB tenant +<br/>migrate deploy</div><div class="arrow">→</div>
+        <div class="node"><b>Central DB</b>simpan registry<br/>host/db/user/pass</div><div class="arrow">→</div>
+        <div class="node"><b>Login</b>resolve tenant context<br/>license + feature</div><div class="arrow">→</div>
+        <div class="node"><b>Tenant DB</b>operasional<br/>WA, contact, blast</div>
+      </div></div>
+      <div class="grid three">
+        <div class="card"><h4>Central DB untuk apa?</h4><p class="small muted">Sebagai registry dan dispatcher lintas tenant: menyimpan daftar tenant, konfigurasi koneksi database tenant, mapping instance ke tenant, credential external API, mapping Instagram, snapshot runtime, onboarding, admin, dan pointer queue global.</p></div>
+        <div class="card"><h4>Tenant DB untuk apa?</h4><p class="small muted">Sebagai source of truth operasional workspace KelolaPesan: instance WhatsApp, contact/list, chat, bot, sequence, blast, attachment, phone validator, Instagram/social account, automation, event, dan log pesan.</p></div>
+        <div class="card"><h4>Koneksinya bagaimana?</h4><p class="small muted">Request user membawa session <code>tenantId + licenseCode</code>. Service mengambil config dari central, membuat tenant-specific Prisma client via <code>getTenantPrisma(tenantId)</code>, lalu query hanya ke DB tenant sesuai scope.</p></div>
+      </div>
+    </section>
+
+    <section id="architecture" data-searchable>
+      <div class="eyebrow">03 · Architecture</div><h2>Arsitektur dan struktur repository</h2>
+      <div class="layers">
+        <div class="layer"><b>UI / App Router</b> — page, server component, client component, route handler; parsing dan auth tetap tipis.</div>
+        <div class="layer"><b>Domain service</b> — validasi scope, subscription, state transition, transaction, dan orkestrasi external service.</div>
+        <div class="layer"><b>Infrastructure</b> — Prisma central/tenant, cache, WA HTTP client, realtime publisher, crypto, file/session store.</div>
+        <div class="layer"><b>External runtime</b> — membership/auth, wa-sevenlead, WhatsApp Web, Socket.IO service, Meta Graph API.</div>
+      </div>
+      <div class="grid two" style="margin-top:16px">
+        <div class="card"><h3><code>sevenlead/</code></h3><div class="tree">app/                 Next.js pages + API routes
+components/          UI per domain + shared UI
+services/            business logic / use cases
+lib/                 auth, Prisma, cache, integrations
+prisma/central/      global registry + queue schema
+prisma/tenant/       operational schema per workspace
+scripts/             worker, backfill, migration CLI
+realtime-socket-service/  Socket.IO transport
+types/               domain/API/realtime contracts
+docs/                runbook dan handbook ini</div></div>
+        <div class="card"><h3><code>wa-sevenlead/</code></h3><div class="tree">src/app.ts           Express bootstrap
+src/client-manager.ts WhatsApp client lifecycle/runtime
+src/routes/           internal HTTP endpoints
+src/services/         callbacks, bot, send, bootstrap
+src/middlewares/      x-api-key verification
+.wwebjs_auth/         persistent LocalAuth sessions
+.wwebjs_cache/        browser/web cache
+.runtime/             blast ACK tracker JSON</div><p class="small muted">README WA saat ini masih template GitLab; kode adalah sumber dokumentasi yang lebih akurat.</p></div>
+      </div>
+      <div class="callout"><strong>Dependency rule:</strong> <code>UI / Route → Service → Prisma / External Service</code>. Untuk resource tenant, service mengambil client melalui <code>getTenantPrisma(tenantId)</code> dan memvalidasi ownership lewat <code>TenantResourceScopeService</code>.</div>
+    </section>
+
+    <section id="business-flow" data-searchable>
+      <div class="eyebrow">04 · Business flow</div><h2>Alur bisnis end-to-end</h2>
+      <h3>Lifecycle Membership → tenant Sevenlead → login</h3>
+      <p class="muted">Membership adalah otoritas order, lisensi, subscription, package, dan feature. Sevenlead bertanggung jawab atas provisioning database tenant, registry koneksi central, session aplikasi, dan seluruh data operasional tenant.</p>
+      <div class="diagram"><div class="flow">
+        <div class="node"><b>1. Order sukses</b>Membership membuat<br/>tenant + lisensi produk</div><div class="arrow">→</div>
+        <div class="node"><b>2. create_db</b>Membership callback<br/>Bearer secret</div><div class="arrow">→</div>
+        <div class="node"><b>3. Provision</b>CREATE DATABASE +<br/>migrate deploy</div><div class="arrow">→</div>
+        <div class="node"><b>4. Register</b>Central Tenant +<br/>DB configuration</div><div class="arrow">→</div>
+        <div class="node"><b>5. Ready</b>Membership menerima<br/>dbConfig</div><div class="arrow">→</div>
+        <div class="node"><b>6. Login</b>Membership validates;<br/>Sevenlead issues JWT</div>
+      </div></div>
+
+      <details open><summary>A. Setelah order produk berhasil: provisioning database tenant</summary><div>
+        <p>Flow ini dipanggil server-to-server setelah Membership menyatakan order produk Sevenlead berhasil. User belum perlu membuka aplikasi pada tahap ini.</p>
+        <div class="table-wrap"><table><thead><tr><th>Langkah</th><th>Pelaksana</th><th>Perilaku aktual</th><th>Output/state</th></tr></thead><tbody>
+          <tr><td>1. Finalisasi order</td><td>Membership</td><td>Membuat/menentukan <code>tenantId</code>, license, product, package, dan username.</td><td>Order dianggap eligible untuk provisioning.</td></tr>
+          <tr><td>2. Callback provisioning</td><td>Membership → Sevenlead</td><td><code>POST /api/v1/external/membership/create_db</code> dengan <code>Authorization: Bearer &lt;MEMBERSHIP_API_SECRET&gt;</code>.</td><td>Request hanya diterima jika shared secret sama.</td></tr>
+          <tr><td>3. Idempotency check</td><td>Sevenlead</td><td>Mencari central <code>Tenant</code> berdasarkan <code>tenantId</code>. Jika sudah ada, konfigurasi yang sama langsung dikembalikan.</td><td>Retry tidak membuat DB baru.</td></tr>
+          <tr><td>4. Concurrency lock</td><td>Sevenlead/PostgreSQL</td><td>Mengambil advisory lock <code>sevenlead:provision:&lt;tenantId&gt;</code>, lalu mengecek registry sekali lagi.</td><td>Dua callback paralel tidak memprovision tenant yang sama.</td></tr>
+          <tr><td>5. Buat database</td><td>Sevenlead/PostgreSQL</td><td>Membentuk nama <code>leadx_&lt;username-normalized&gt;</code>, mencari suffix yang kosong, lalu menjalankan <code>CREATE DATABASE</code>.</td><td>Database tenant kosong.</td></tr>
+          <tr><td>6. Apply schema</td><td>Sevenlead/Prisma</td><td>Menjalankan <code>prisma migrate deploy</code> memakai <code>prisma/tenant/schema.prisma</code>.</td><td>Schema dan <code>_prisma_migrations</code> siap sejak awal.</td></tr>
+          <tr><td>7. Register tenant</td><td>Sevenlead central DB</td><td>Menyimpan tenantId, licenseCode, productCode, dbName, host, port, username, dan password.</td><td><code>getTenantPrisma(tenantId)</code> dapat resolve database.</td></tr>
+          <tr><td>8. Response</td><td>Sevenlead → Membership</td><td>Mengembalikan konfigurasi database dan <code>packageCode</code> dengan HTTP 201.</td><td>Membership dapat menyimpan/menggunakan dbConfig untuk kontrak login.</td></tr>
+        </tbody></table></div>
+        <h4>Request callback</h4>
+        <pre><code>POST /api/v1/external/membership/create_db
+Authorization: Bearer &lt;MEMBERSHIP_API_SECRET&gt;
+Content-Type: application/json
+
+{
+  "tenantId": "&lt;UUID_TENANT_DARI_MEMBERSHIP&gt;",
+  "licenseCode": "&lt;LICENSE_CODE&gt;",
+  "productCode": "&lt;SEVENLEAD_PRODUCT_CODE&gt;",
+  "packageCode": "&lt;PACKAGE_CODE&gt;",
+  "username": "&lt;USERNAME_OWNER&gt;"
+}</code></pre>
+        <h4>Response sukses</h4>
+        <pre><code>HTTP 201
+{
+  "success": true,
+  "message": "Tenant berhasil di-provisioning",
+  "data": {
+    "dbName": "leadx_username",
+    "dbUsername": "&lt;DB_USER&gt;",
+    "dbPassword": "&lt;DB_PASSWORD&gt;",
+    "dbHost": "&lt;DB_HOST&gt;",
+    "dbPort": "5432",
+    "packageCode": "&lt;PACKAGE_CODE&gt;"
+  }
+}</code></pre>
+        <div class="callout warning"><strong>Security boundary:</strong> response membawa credential database tenant. Endpoint wajib hanya melalui HTTPS/private network; <code>MEMBERSHIP_API_SECRET</code> disimpan di secret manager, tidak di frontend atau log. Idealnya credential DB tidak perlu dikembalikan jika Membership hanya membutuhkan status provisioning.</div>
+        <div class="callout danger"><strong>Failure path:</strong> jika <code>CREATE DATABASE</code> berhasil tetapi migration atau insert registry gagal, kode hanya menulis log bahwa cleanup manual mungkin diperlukan. Callback akan gagal dan retry berpotensi memilih nama DB suffix baru karena DB lama belum terdaftar. Runbook incident harus mencari orphan DB, memverifikasi migration, lalu memilih cleanup atau registrasi terkontrol sebelum retry.</div>
+      </div></details>
+
+      <details open><summary>B. Login Sevenlead melalui Membership</summary><div>
+        <div class="diagram"><div class="flow">
+          <div class="node"><b>User</b>username +<br/>licenseCode</div><div class="arrow">→</div>
+          <div class="node"><b>POST /api/auth/login</b>route tipis</div><div class="arrow">→</div>
+          <div class="node"><b>Membership Auth</b>subscription, DB,<br/>feature, mode</div><div class="arrow">→</div>
+          <div class="node"><b>Central upsert</b>sinkronisasi registry</div><div class="arrow">→</div>
+          <div class="node"><b>Context + JWT</b>cache per license<br/>cookie 2 jam</div><div class="arrow">→</div>
+          <div class="node"><b>Protected app</b>tenant/agency<br/>resource scope</div>
+        </div></div>
+        <ol>
+          <li>User mengirim <code>username</code> dan <code>licenseCode</code> ke <code>POST /api/auth/login</code>.</li>
+          <li><code>AuthService</code> meneruskan validasi ke Membership Auth API menggunakan header server <code>X-API-Key</code> dan <code>X-Product-Code</code>. Secret ini tidak pernah dikirim browser.</li>
+          <li>Membership mengembalikan tenant, subscription, <code>dbConfig</code>, features, mode REGULAR/AGENCY, dan metadata agency bila ada.</li>
+          <li>Sevenlead meng-upsert central <code>Tenant</code> menggunakan dbConfig dari Membership. Ini menyelaraskan registry walaupun sebelumnya sudah dibuat oleh endpoint <code>create_db</code>.</li>
+          <li>Tenant context disimpan dalam cache dengan key <code>tenant:&lt;tenantId&gt;:license:&lt;licenseCode&gt;</code>, sehingga feature/quota agency tidak tercampur dengan workspace utama.</li>
+          <li>Sevenlead membuat JWT HS256 dengan issuer <code>sevenlead</code>, audience <code>sevenlead-app</code>, dan expiry 2 jam.</li>
+          <li>Route menyimpan JWT ke cookie session dengan <code>httpOnly</code>, <code>sameSite=lax</code>, <code>secure</code> di production, path <code>/</code>, dan max-age 2 jam.</li>
+          <li>Route/page berikutnya membaca <code>tenantId + licenseCode + accessMode</code> dari session; service tetap memvalidasi ownership resource di tenant DB.</li>
+        </ol>
+        <div class="grid two">
+          <div class="card"><h4>REGULAR</h4><p>Scope workspace utama. Resource tenant dapat diakses sesuai ownership tenant dan subscription workspace.</p></div>
+          <div class="card"><h4>AGENCY</h4><p>Database tetap milik workspace yang sama, tetapi boundary instance dan resource turunannya dibatasi oleh <code>agencyLicenseCode</code>.</p></div>
+        </div>
+        <div class="callout"><strong>Readiness invariant:</strong> idealnya callback <code>create_db</code> harus sukses sebelum user dapat login. Walau login melakukan upsert registry, login tetap bergantung pada <code>dbConfig</code> valid yang dikembalikan Membership; ia bukan pengganti provisioning database.</div>
+      </div></details>
+      <details><summary>Lifecycle instance WhatsApp</summary><div><ol><li>User membuat instance; Sevenlead menyimpan tenant row + central mapping/runtime.</li><li>Sevenlead meminta <code>POST /instances</code ke WA service.</li><li>WA service membuat <code>whatsapp-web.js Client</code> dengan <code>LocalAuth</code>.</li><li>Event QR, authenticated, ready, disconnected dikirim kembali ke internal API Sevenlead.</li><li>Sevenlead memperbarui state tenant/central, lalu publish event realtime.</li><li>Browser menerima event hanya dari room workspace/license yang ditentukan token server.</li></ol></div></details>
+      <details><summary>Kontak, list, dan sequence</summary><div><ol><li>Kontak dibuat/import/sync ke list milik instance.</li><li>Input dinormalisasi dan deduplikasi; data soft-delete dapat direstore.</li><li>Kontak baru/restored memicu <code>scheduleForContact</code>.</li><li>Sequence job tenant dibuat beserta snapshot pesan, lalu pointer dimasukkan ke central queue.</li><li>Worker sequence claim job due, mengirim via WA service, lalu sinkronkan status tenant + central.</li></ol></div></details>
+      <details><summary>Incoming chat dan bot responder</summary><div><ol><li>WA event <code>message</code> dinormalisasi, chat unsupported/status/broadcast disaring.</li><li>WA mengirim snapshot chat ke internal Sevenlead; Sevenlead menyimpan conversation/message.</li><li>Bot responder meminta daftar bot yang match keyword/rule.</li><li>Aksi dijalankan berurutan: reply, save/move/delete contact list, attachment, typing delay.</li><li>Status message log dikirim kembali sebagai PROCESSING/SENT/FAILED.</li></ol></div></details>
+    </section>
+
+    <section id="access-modes" data-searchable>
+      <div class="eyebrow">05 · Access model</div><h2>Alur REGULAR dan AGENCY</h2>
+      <p class="section-intro">REGULAR dan AGENCY bukan dua jenis tenant database. Keduanya bekerja di workspace dan database tenant yang sama; perbedaannya berada pada license context, quota, dan pembatasan resource yang berakar dari <code>Instance.agencyLicenseCode</code>.</p>
+
+      <div class="diagram"><div class="flow">
+        <div class="node"><b>Membership</b>resolve license<br/>dan access mode</div><div class="arrow">→</div>
+        <div class="node"><b>Sevenlead login</b>tenantId + licenseCode<br/>workspaceLicenseCode</div><div class="arrow">→</div>
+        <div class="node"><b>JWT/session</b>REGULAR atau AGENCY<br/>berlaku 2 jam</div><div class="arrow">→</div>
+        <div class="node"><b>Tenant context</b>cache per tenant<br/>+ license</div><div class="arrow">→</div>
+        <div class="node"><b>Resource scope</b>seluruh workspace<br/>atau satu agency license</div>
+      </div></div>
+
+      <h3>Konsep yang wajib dipahami</h3>
+      <div class="grid three">
+        <div class="card"><span class="badge info">Shared workspace</span><h3>Satu tenant, satu DB</h3><p>License agency tidak memanggil <code>create_db</code> lagi. Semua seat/license agency menunjuk <code>tenantId</code> dan tenant DB milik workspace yang sama.</p></div>
+        <div class="card"><span class="badge ok">Boundary root</span><h3>Instance sebagai akar</h3><p><code>agencyLicenseCode</code> pada instance menentukan ownership. Contact list, contact, bot, blast, sequence, dan resource turunannya diamankan melalui relasi ke instance.</p></div>
+        <div class="card"><span class="badge warn">Direct scope</span><h3>Resource tertentu menyimpan scope</h3><p>Attachment, chat conversation, social account/automation, dan credential external API menyimpan atau menyalurkan agency scope untuk lookup dan realtime yang aman.</p></div>
+      </div>
+
+      <h3>Perbandingan perilaku aktual</h3>
+      <div class="table-wrap"><table><thead><tr><th>Area</th><th>REGULAR</th><th>AGENCY</th></tr></thead><tbody>
+        <tr><td>Identitas login</td><td><code>accessMode=REGULAR</code>; license biasanya license workspace.</td><td><code>accessMode=AGENCY</code>; session membawa license agency dan <code>agencyLicenseId</code>.</td></tr>
+        <tr><td>Database</td><td>Tenant DB workspace.</td><td>Tenant DB workspace yang sama—bukan DB baru.</td></tr>
+        <tr><td>Scope instance</td><td>Tidak menambahkan filter agency; dapat melihat seluruh instance aktif dalam tenant.</td><td>Wajib <code>agencyLicenseCode = session.licenseCode</code>.</td></tr>
+        <tr><td>Resource turunan</td><td>Dapat mengikuti seluruh instance tenant.</td><td>Hanya resource dengan ownership chain menuju instance license tersebut.</td></tr>
+        <tr><td>Quota instance</td><td>Query saat ini menghitung seluruh instance aktif tenant, termasuk instance agency.</td><td>Menghitung instance aktif milik agency license itu saja.</td></tr>
+        <tr><td>Display name</td><td>Nama user/workspace dari session.</td><td>Label agency, lalu nama agency, lalu nama session sebagai fallback.</td></tr>
+        <tr><td>Subscription access</td><td>Status dan expiry license workspace.</td><td>Status dan effective expiry license agency dari Membership context.</td></tr>
+        <tr><td>Realtime room</td><td><code>tenant:{tenantId}:workspace</code>.</td><td><code>tenant:{tenantId}:license:{licenseCode}</code>.</td></tr>
+        <tr><td>External API key</td><td>Credential instance dengan <code>agencyLicenseCode=null</code> untuk scope workspace.</td><td>Credential terikat tenant + instance + agency license.</td></tr>
+      </tbody></table></div>
+      <div class="callout warning"><strong>Nuansa penting:</strong> pada kode saat ini, REGULAR berarti akses seluruh tenant, bukan “hanya instance dengan <code>agencyLicenseCode=null</code>”. Jangan menambahkan filter <code>null</code> pada route REGULAR tanpa keputusan produk karena itu akan mengubah visibility workspace owner.</div>
+
+      <details open><summary>A. Login REGULAR</summary><div>
+        <ol>
+          <li>User memasukkan username dan license code workspace.</li>
+          <li>Membership memvalidasi produk/subscription dan mengembalikan <code>mode=REGULAR</code>, tenant, dbConfig, package, serta features.</li>
+          <li>Sevenlead menyimpan context dengan <code>licenseCode</code> login dan <code>workspaceLicenseCode=tenant.licenseCode</code>.</li>
+          <li>JWT memuat <code>tenantId</code>, <code>licenseCode</code>, <code>workspaceLicenseCode</code>, dan <code>accessMode=REGULAR</code>.</li>
+          <li><code>resolveAgencyLicenseCode()</code> menghasilkan <code>null</code>; query instance tidak menambahkan filter agency.</li>
+          <li>User workspace dapat mengelola seluruh instance dan resource tenant sesuai feature/quota yang dikembalikan Membership.</li>
+        </ol>
+      </div></details>
+
+      <details open><summary>B. Login AGENCY</summary><div>
+        <ol>
+          <li>User memasukkan agency license code yang diberikan workspace owner/Membership.</li>
+          <li>Membership memvalidasi seat/license dan mengembalikan <code>mode=AGENCY</code>, workspace <code>tenantId</code>, agency metadata, feature, quota, status, dan expiry.</li>
+          <li>Sevenlead tetap menggunakan dbConfig workspace, tetapi cache context dibuat per kombinasi <code>tenantId + agency licenseCode</code>.</li>
+          <li>JWT menyimpan license agency sebagai <code>licenseCode</code>, license workspace sebagai <code>workspaceLicenseCode</code>, serta <code>agencyLicenseId</code>.</li>
+          <li><code>TenantResourceScopeService</code> memverifikasi context dan menghasilkan filter <code>agencyLicenseCode=session.licenseCode</code>.</li>
+          <li>List/detail/create/update/delete/import/export wajib membawa scope yang sama agar agency tidak dapat menebak ID resource license lain.</li>
+        </ol>
+        <div class="callout"><strong>Cache isolation:</strong> cache key berbentuk <code>tenant:{tenantId}:license:{licenseCode}</code>. Cache hanya berdasarkan tenantId akan mencampur feature, quota, label, status, dan expiry antaragency.</div>
+      </div></details>
+
+      <details open><summary>C. Membuat instance dan resource</summary><div>
+        <div class="diagram"><div class="flow">
+          <div class="node"><b>Session scope</b>tenant + license</div><div class="arrow">→</div>
+          <div class="node"><b>Tenant context</b>status ACTIVE<br/>+ INSTANCE_TERSEDIA</div><div class="arrow">→</div>
+          <div class="node"><b>Quota check</b>workspace total<br/>atau agency total</div><div class="arrow">→</div>
+          <div class="node"><b>Create Instance</b>null atau agency<br/>license code</div><div class="arrow">→</div>
+          <div class="node"><b>Downstream</b>API key, runtime,<br/>WA session</div>
+        </div></div>
+        <ol>
+          <li>Service menolak create ketika tenant context tidak <code>ACTIVE</code>.</li>
+          <li>Limit diambil dari feature numerik <code>INSTANCE_TERSEDIA</code>; nilai <code>unlimited</code> tidak dibatasi.</li>
+          <li>REGULAR membuat instance dengan <code>agencyLicenseCode=null</code>; AGENCY menyimpan license code aktif.</li>
+          <li>Central <code>InstanceMapping</code> tetap hanya memetakan instance ke tenant. Agency boundary tetap diputuskan di Sevenlead sebelum request menuju WA service.</li>
+          <li>External API key diterbitkan dengan agency scope yang sama, lalu runtime snapshot dibuat dan WA service diminta memulai client.</li>
+          <li>Resource baru harus menempel pada instance atau menyimpan agencyLicenseCode bila tidak punya ownership chain yang aman.</li>
+        </ol>
+      </div></details>
+
+      <details open><summary>D. Perubahan quota, status, label, atau expiry agency</summary><div>
+        <p>Membership harus memanggil endpoint sinkronisasi setelah perubahan efektif:</p>
+        <pre><code>POST /api/v1/external/membership/agency-license-sync
+Authorization: Bearer &lt;MEMBERSHIP_API_SECRET&gt;
+Content-Type: application/json
+
+{
+  "tenantId": "&lt;WORKSPACE_TENANT_ID&gt;",
+  "licenseCode": "&lt;AGENCY_LICENSE_CODE&gt;"
+}</code></pre>
+        <div class="timeline">
+          <div class="step"><h4>1. Invalidate dan refresh</h4><p>Cache tenant/license dihapus, lalu context terbaru diambil langsung dari Membership.</p></div>
+          <div class="step"><h4>2. Reconcile quota</h4><p>Jika jumlah instance melebihi limit, instance dalam scope agency dihapus permanen. Prioritas removal: DISCONNECTED → QR_READY → PENDING → AUTHENTICATED → CONNECTED; pada status yang sama, instance terbaru dihapus lebih dahulu.</p></div>
+          <div class="step"><h4>3. Reconcile access</h4><p>Jika status tidak ACTIVE atau expiry telah lewat, session WhatsApp instance connected dibersihkan.</p></div>
+          <div class="step"><h4>4. Reconcile timeout</h4><p><code>connectionExpiresAt</code> menjadi tanggal paling awal antara batas durasi FREE/TRIAL dan access expiry dari Membership.</p></div>
+          <div class="step"><h4>5. Return summary</h4><p>Response memuat mode, status, expiry, display name, instance limit, jumlah instance deleted/adjusted/active.</p></div>
+        </div>
+        <div class="callout danger"><strong>Operasi destruktif:</strong> penurunan quota dapat memanggil permanent deletion, bukan sekadar disable. Membership/UI harus meminta konfirmasi yang sesuai sebelum mengurangi quota, dan operator harus memantau response reconciliation.</div>
+      </div></details>
+
+      <details><summary>E. Worker, blast, sequence, dan subscription expiry</summary><div>
+        <ul>
+          <li>Blast dan sequence mengambil license dari <code>instance.agencyLicenseCode</code>; jika null, gunakan license workspace.</li>
+          <li>Access result dicache 60 detik per <code>tenantId + licenseCode</code>, tetapi worker dapat memaksa refresh.</li>
+          <li>Worker subscription mengelompokkan instance menjadi scope workspace (<code>__workspace__</code>) atau tiap agency license.</li>
+          <li>Jika satu scope tidak aktif, hanya recipient blast, sequence job, dan session instance pada scope tersebut yang dibatalkan/dibersihkan.</li>
+          <li>WA service tetap tidak mengenal agency. Ia menerima instanceId setelah Sevenlead menyelesaikan authorization.</li>
+        </ul>
+      </div></details>
+
+      <details><summary>F. Realtime dan pencegahan kebocoran event</summary><div>
+        <ul>
+          <li>Token realtime berlaku 15 menit dan membawa accessMode serta license context dari session.</li>
+          <li>REGULAR bergabung ke room workspace; AGENCY hanya ke room license miliknya.</li>
+          <li>Event resource agency dipublish ke room agency dan, bila <code>includeWorkspace=true</code>, juga ke room workspace owner.</li>
+          <li>Jangan menerima room name mentah dari client dan jangan broadcast event tenant tanpa agencyLicenseCode ketika event hanya boleh terlihat oleh satu agency.</li>
+        </ul>
+      </div></details>
+
+      <h3>Checklist menambah module baru</h3>
+      <ol>
+        <li>Tentukan root ownership: instance, contact list, blast, sequence, atau resource lain.</li>
+        <li>Semua user-facing service menerima <code>{ tenantId, licenseCode }</code>, bukan tenantId saja.</li>
+        <li>Gunakan <code>TenantResourceScopeService</code>; jangan membuat pengecekan ID yang hanya memvalidasi tenant.</li>
+        <li>Pastikan list, detail, create, update, delete, import, export, retry, dan background job semuanya scope-aware.</li>
+        <li>Jika resource tidak aman melalui relasi instance, simpan <code>agencyLicenseCode</code> secara eksplisit dan beri index.</li>
+        <li>Propagasikan scope ke realtime event, cache key, external credential, attachment, dan audit log.</li>
+        <li>Uji minimal: REGULAR melihat workspace; agency A melihat A; agency A tidak dapat membaca/mutasi ID milik agency B.</li>
+      </ol>
+
+      <div class="callout warning"><strong>Contract risk yang harus diuji:</strong> <code>SubscriptionAccessService</code> dan reconciliation memakai top-level <code>TenantContext.expiredAt</code>. Membership harus mengisinya dengan effective expiry yang benar untuk agency—tanggal paling awal dari subscription workspace, expiry agency, dan expiry seat. Field metadata <code>agency.effectiveExpiresAt</code> tidak digunakan langsung oleh access checker saat ini.</div>
+    </section>
+
+    <section id="instagram-meta" data-searchable>
+      <div class="eyebrow">06 · Social integration</div><h2>Instagram dan Meta</h2>
+      <p class="section-intro">Integrasi ini memakai <strong>Instagram API with Instagram Login</strong> untuk menghubungkan akun profesional ke satu instance Sevenlead, membaca media, menerima webhook komentar, lalu mengirim private reply. Bagian ini membedakan perilaku yang benar-benar ada di kode dari target production yang masih harus dibangun.</p>
+
+      <div class="grid three">
+        <div class="card"><span class="badge ok">Implemented</span><h3>OAuth + encrypted token</h3><p>User menghubungkan akun Business/Creator melalui OAuth. Access token disimpan terenkripsi AES-256-GCM di tenant database.</p></div>
+        <div class="card"><span class="badge ok">Implemented</span><h3>Comment-to-DM</h3><p>Webhook komentar dicocokkan ke automation aktif. Match pertama mengirim private reply ke pemilik komentar dan menyimpan event serta delivery log.</p></div>
+        <div class="card"><span class="badge ok">Implemented</span><h3>Text inbox</h3><p>Event DM disimpan di durable inbox terenkripsi, diproses worker secara idempotent, lalu dipublish realtime. Media dicatat sebagai unsupported untuk rollout berikutnya.</p></div>
+      </div>
+
+      <h3>Boundary dan ownership</h3>
+      <div class="diagram"><div class="flow">
+        <div class="node"><b>Browser</b>session Sevenlead<br/>connect & automation</div><div class="arrow">→</div>
+        <div class="node"><b>Next.js API</b>OAuth callback<br/>webhook receiver</div><div class="arrow">↔</div>
+        <div class="node"><b>Meta / Instagram</b>OAuth + Graph API<br/>webhook delivery</div><div class="arrow">↔</div>
+        <div class="node"><b>Central DB</b>IG user → tenant<br/>routing mapping</div><div class="arrow">↔</div>
+        <div class="node"><b>Tenant DB</b>token, automation,<br/>event & reply log</div>
+      </div></div>
+      <div class="callout"><strong>Ownership invariant:</strong> satu provider Instagram hanya boleh terhubung sekali per instance, dan satu <code>igUserId</code> hanya boleh memiliki satu central mapping. User route selalu memvalidasi instance terhadap <code>tenantId + licenseCode</code>; webhook memakai central mapping untuk menemukan tenant tanpa mempercayai tenant ID dari payload publik.</div>
+
+      <h3>Yang dibutuhkan sebelum integrasi</h3>
+      <div class="grid two">
+        <div class="card"><span class="badge warn">Meta configuration</span><h3>Prasyarat eksternal</h3><ol><li>Akun Instagram <strong>Business atau Creator</strong>.</li><li>Meta Developer App dengan produk Instagram API dan Instagram Login yang dikonfigurasi.</li><li>OAuth redirect URI persis: <code>{APP_BASE_URL}/api/v1/social/instagram/oauth/callback</code>.</li><li>Webhook callback publik HTTPS: <code>{APP_BASE_URL}/api/v1/internal/instagram/webhook</code>.</li><li>Verify token dashboard sama dengan <code>META_WEBHOOK_VERIFY_TOKEN</code>.</li><li>Permission, App Review, business verification, tester, dan mode Live diselesaikan sesuai requirement Meta untuk environment terkait.</li></ol></div>
+        <div class="card"><span class="badge warn">Operational rule</span><h3>Aturan deployment</h3><ul><li>Redirect/callback production harus HTTPS dan dapat dijangkau Meta.</li><li>Jangan menggunakan secret development di production.</li><li>Pin versi Graph API; lakukan regression test sebelum upgrade.</li><li>Tambahkan callback URI untuk setiap environment secara eksplisit.</li><li>Meta dashboard dan requirement review dapat berubah; validasi ulang terhadap dokumentasi resmi saat release.</li></ul></div>
+      </div>
+
+      <h3>Environment variable</h3>
+      <div class="table-wrap"><table><thead><tr><th>Variable</th><th>Wajib</th><th>Fungsi / aturan</th></tr></thead><tbody>
+        <tr><td><code>META_INSTAGRAM_LOGIN_APP_ID</code></td><td>Ya</td><td>App ID untuk Instagram Login.</td></tr>
+        <tr><td><code>META_INSTAGRAM_LOGIN_APP_SECRET</code></td><td>Ya</td><td>App secret untuk token exchange. Simpan di secret manager.</td></tr>
+        <tr><td><code>META_INSTAGRAM_REDIRECT_URI</code></td><td>Ya</td><td>Harus sama persis dengan callback yang didaftarkan di Meta.</td></tr>
+        <tr><td><code>META_GRAPH_API_VERSION</code></td><td>Disarankan</td><td>Versi Graph API yang dipin; fallback implementasi saat ini <code>v23.0</code>.</td></tr>
+        <tr><td><code>META_INSTAGRAM_SCOPES</code></td><td>Disarankan</td><td>Default: <code>instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments</code>.</td></tr>
+        <tr><td><code>INSTAGRAM_TOKEN_ENCRYPTION_KEY</code></td><td>Ya</td><td>Base64 yang setelah decode tepat <strong>32 byte</strong>; digunakan AES-256-GCM.</td></tr>
+        <tr><td><code>META_WEBHOOK_VERIFY_TOKEN</code></td><td>Ya</td><td>Secret acak untuk handshake GET webhook.</td></tr>
+        <tr><td><code>META_WEBHOOK_APP_SECRET</code></td><td>Production</td><td>Memverifikasi <code>x-hub-signature-256</code>; fallback kode adalah login app secret.</td></tr>
+        <tr><td><code>META_INSTAGRAM_WEBHOOK_FIELDS</code></td><td>Disarankan</td><td>Default subscription: <code>comments,messages</code>. Saat ini handler hanya memproses comment changes.</td></tr>
+        <tr><td><code>APP_BASE_URL</code>, <code>NEXT_PUBLIC_APP_URL</code></td><td>Ya</td><td>Base URL absolut untuk callback dan redirect kembali ke halaman instance.</td></tr>
+        <tr><td><code>JWT_SECRET</code></td><td>Ya</td><td>Menandatangani OAuth state HS256; issuer <code>sevenlead</code>, audience <code>sevenlead-instagram-oauth</code>, TTL 10 menit.</td></tr>
+      </tbody></table></div>
+      <pre><code># Generate key token encryption (jalankan sekali, lalu simpan hasilnya di secret manager)
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+
+META_INSTAGRAM_REDIRECT_URI=https://app.example.com/api/v1/social/instagram/oauth/callback
+META_INSTAGRAM_WEBHOOK_FIELDS=comments,messages</code></pre>
+
+      <h3>Alur koneksi OAuth yang berjalan</h3>
+      <div class="diagram"><div class="flow">
+        <div class="node"><b>1. Start</b>cek session +<br/>instance scope</div><div class="arrow">→</div>
+        <div class="node"><b>2. State</b>signed JWT<br/>tenant/license/instance</div><div class="arrow">→</div>
+        <div class="node"><b>3. Consent</b>Instagram Login<br/>authorization code</div><div class="arrow">→</div>
+        <div class="node"><b>4. Exchange</b>short token →<br/>long-lived token</div><div class="arrow">→</div>
+        <div class="node"><b>5. Persist</b>tenant account +<br/>central mapping</div><div class="arrow">→</div>
+        <div class="node"><b>6. Subscribe</b>webhook fields +<br/>diagnostics</div>
+      </div></div>
+      <ol>
+        <li><code>POST .../oauth/start</code> memverifikasi session dan ownership REGULAR/AGENCY, lalu membuat state JWT berisi tenant, license, instance, dan nonce.</li>
+        <li>Browser diarahkan ke <code>https://www.instagram.com/oauth/authorize</code>. Callback publik memverifikasi signature, issuer, audience, dan expiry state.</li>
+        <li>Code ditukar ke short-lived token, lalu dicoba ditukar ke long-lived token. Jika pertukaran kedua gagal, implementasi saat ini tetap memakai short token dan expiry menjadi null.</li>
+        <li>Profile <code>/me</code> diambil; tenant account di-upsert dengan token terenkripsi, kemudian central routing mapping dibuat.</li>
+        <li>Service mencoba subscribe webhook dan mengambil diagnostics. Kegagalan subscription tidak membatalkan koneksi: status tetap CONNECTED dan warning disimpan di <code>lastError</code>.</li>
+        <li>User diarahkan ke <code>/instances/{id}/social-media/instagram?instagram=connected|failed</code>.</li>
+      </ol>
+      <div class="callout warning"><strong>Perhatikan callback error:</strong> alasan kegagalan saat ini dapat diteruskan lewat query <code>reason</code>. UI dan log tidak boleh membocorkan token, app secret, raw authorization code, atau detail internal sensitif.</div>
+
+      <h3>Alur webhook komentar → private reply</h3>
+      <div class="diagram"><div class="flow">
+        <div class="node"><b>Meta delivery</b>raw body +<br/>HMAC signature</div><div class="arrow">→</div>
+        <div class="node"><b>Verify</b>SHA-256 +<br/>parse comments</div><div class="arrow">→</div>
+        <div class="node"><b>Route</b>entry.id → central<br/>tenant mapping</div><div class="arrow">→</div>
+        <div class="node"><b>Match</b>media + keyword<br/>first active rule</div><div class="arrow">→</div>
+        <div class="node"><b>Send DM</b>recipient uses<br/>comment_id</div><div class="arrow">→</div>
+        <div class="node"><b>Persist</b>event REPLIED/<br/>FAILED + reply log</div>
+      </div></div>
+      <ul>
+        <li>GET verification membandingkan <code>hub.verify_token</code> lalu mengembalikan challenge.</li>
+        <li>POST production wajib memiliki signature valid. Development saat ini lebih permisif bila secret/signature tidak tersedia; jangan meniru perilaku itu di production.</li>
+        <li>Perubahan <code>comments</code>/<code>live_comments</code> diproses oleh automation; event <code>messages</code> masuk ke inbox channel terpisah dan diproses worker.</li>
+        <li>Rule untuk media yang sama diurutkan dari yang paling lama; rule aktif pertama dengan mode <code>EXACT</code>, <code>CONTAINS</code>, atau <code>STARTS_WITH</code> yang cocok akan menang.</li>
+        <li>Unique key event adalah account + comment ID; unique key reply log adalah automation + comment ID. Ini membantu deduplikasi, tetapi belum menutup race send paralel atau crash setelah Meta menerima DM.</li>
+        <li><code>publicReplyMessage</code> sudah disimpan tetapi belum dikirim oleh implementasi saat ini.</li>
+      </ul>
+
+      <h3>Endpoint Instagram</h3>
+      <div class="table-wrap"><table><thead><tr><th>Method/path</th><th>Fungsi</th><th>Auth</th><th>Catatan</th></tr></thead><tbody>
+        <tr><td><code>GET /api/v1/instances/:id/social/instagram</code></td><td>Status akun terhubung</td><td>Session + instance scope</td><td>Token tidak dikembalikan.</td></tr>
+        <tr><td><code>DELETE /api/v1/instances/:id/social/instagram</code></td><td>Disconnect lokal</td><td>Session + instance scope</td><td>Soft-delete tenant account dan hapus mapping central; belum revoke token/unsubscribe Meta.</td></tr>
+        <tr><td><code>POST /api/v1/instances/:id/social/instagram/oauth/start</code></td><td>Membuat authorization URL</td><td>Session + instance scope</td><td>State berlaku 10 menit.</td></tr>
+        <tr><td><code>GET /api/v1/social/instagram/oauth/callback</code></td><td>OAuth callback</td><td>Signed state</td><td>Public endpoint yang dipanggil Instagram.</td></tr>
+        <tr><td><code>GET /api/v1/instances/:id/social/instagram/webhook-subscription</code></td><td>Diagnostics subscription</td><td>Session + instance scope</td><td>Gunakan untuk readiness/smoke test.</td></tr>
+        <tr><td><code>GET /api/v1/instances/:id/social/instagram/media</code></td><td>Daftar media akun</td><td>Session + instance scope</td><td>Default limit service 50.</td></tr>
+        <tr><td><code>GET|POST /api/v1/instances/:id/social/instagram/comment-automations</code></td><td>List/create automation</td><td>Session + instance scope</td><td>Keyword max 80; DM max 950 karakter.</td></tr>
+        <tr><td><code>PATCH|DELETE .../comment-automations/:automationId</code></td><td>Update/delete automation</td><td>Session + automation scope</td><td>Ownership diturunkan dari instance.</td></tr>
+        <tr><td><code>GET|POST /api/v1/internal/instagram/webhook</code></td><td>Verification dan event receiver</td><td>Verify token / HMAC</td><td>Public untuk Meta, bukan API user.</td></tr>
+        <tr><td><code>GET /api/v1/instances/:id/channels/instagram/conversations</code></td><td>List inbox Instagram</td><td>Session + instance scope</td><td>Cursor pagination dan search tersedia.</td></tr>
+        <tr><td><code>GET|POST .../conversations/:conversationId</code></td><td>Detail dan balas teks</td><td>Session + conversation scope</td><td>Outbound memakai idempotency key dan delivery attempt.</td></tr>
+      </tbody></table></div>
+
+      <h3>Model data dan isolasi REGULAR/AGENCY</h3>
+      <div class="grid two">
+        <div class="card"><h3>Central routing</h3><p><code>InstagramAccountMapping</code> menyimpan tenant, instance, tenant channel account, agency license, provider, <code>igUserId</code>, <code>webhookIgUserId</code>, dan status. Mapping ini hanya untuk routing global; token tidak disimpan di central.</p></div>
+        <div class="card"><h3>Tenant source of truth</h3><p><code>SocialChannelAccount</code> menyimpan encrypted token dan expiry. Automation, comment event, dan private reply log berada di tenant DB dan mengikuti scope instance/agency.</p></div>
+      </div>
+      <div class="callout ok"><strong>REGULAR vs AGENCY:</strong> alur Meta sama. Perbedaannya hanya authorization context: REGULAR mengakses instance workspace; AGENCY hanya instance dengan <code>agencyLicenseCode</code> miliknya. Central mapping ikut membawa agency license agar routing dan audit tidak kehilangan boundary.</div>
+
+      <h3>Target arsitektur scalable dan production-grade</h3>
+      <div class="diagram"><div class="flow">
+        <div class="node"><b>Webhook edge</b>verify raw body<br/>persist + fast 200</div><div class="arrow">→</div>
+        <div class="node"><b>Durable inbox</b>event ID unique<br/>payload encrypted</div><div class="arrow">→</div>
+        <div class="node"><b>Queue</b>partition by account<br/>retry + backoff</div><div class="arrow">→</div>
+        <div class="node"><b>Worker</b>scope + rule match<br/>rate-limit aware</div><div class="arrow">→</div>
+        <div class="node"><b>Outbox ledger</b>idempotency state<br/>send reconciliation</div><div class="arrow">→</div>
+        <div class="node"><b>DLQ / alerts</b>terminal failure<br/>operator replay</div>
+      </div></div>
+      <div class="card">
+        <div class="risk"><div class="sev critical">CRITICAL</div><div><strong>Duplicate private reply</strong><br/><span class="muted small">Concurrent delivery/crash dapat melewati check sebelum log tersimpan.</span></div><div>Gunakan unique delivery ledger sebelum send, distributed lock/fencing per comment, outbox, dan reconciliation yang aman di-retry.</div></div>
+        <div class="risk"><div class="sev high">HIGH</div><div><strong>Webhook latency</strong><br/><span class="muted small">Graph API dipanggil synchronously sebelum response.</span></div><div>Verify, persist immutable inbox, enqueue, lalu return 200 cepat; proses network call di worker.</div></div>
+        <div class="risk"><div class="sev high">HIGH</div><div><strong>Token lifecycle</strong><br/><span class="muted small">Belum ada refresh scheduler dan expiry alert.</span></div><div>Tambahkan refresh/reconnect scheduler, threshold alert, state NEEDS_RECONNECT, dan rotation audit tanpa log token.</div></div>
+        <div class="risk"><div class="sev high">HIGH</div><div><strong>Retry dan rate limit</strong><br/><span class="muted small">FAILED reply belum punya retry worker/DLQ.</span></div><div>Klasifikasikan error transient/permanent, hormati rate-limit header, exponential backoff + jitter, max attempts, dan operator replay.</div></div>
+        <div class="risk"><div class="sev medium">MEDIUM</div><div><strong>Disconnect lifecycle</strong><br/><span class="muted small">Saat ini hanya membersihkan state lokal.</span></div><div>Best-effort unsubscribe/revoke token, audit actor/time/result, lalu tetap lakukan cleanup lokal yang idempotent.</div></div>
+        <div class="risk"><div class="sev medium">MEDIUM</div><div><strong>OAuth replay</strong><br/><span class="muted small">Nonce ada di JWT tetapi belum dicatat one-time.</span></div><div>Simpan hash nonce dengan TTL dan konsumsi atomik saat callback.</div></div>
+        <div class="risk"><div class="sev medium">MEDIUM</div><div><strong>Data governance</strong><br/><span class="muted small">Webhook dapat mengandung data user Instagram.</span></div><div>Tetapkan minimization, encryption, retention, deletion, subject request, redaction log, dan akses audit.</div></div>
+      </div>
+
+      <h3>Release, smoke test, dan troubleshooting</h3>
+      <div class="grid two">
+        <div class="card"><h3>Release gate</h3><ul><li>Central dan tenant migration Instagram sudah terpasang pada semua tenant.</li><li>Redirect URI dan webhook callback production cocok persis.</li><li>GET verification sukses; signature POST invalid ditolak.</li><li>OAuth akun uji, media list, EXACT/CONTAINS/STARTS_WITH, serta duplicate delivery diuji.</li><li>Diagnostics subscription sehat dan token expiry terlihat di monitoring.</li><li>Alert untuk signature failure, unmapped account, latency, reply failure, rate limit, dan token expiry aktif.</li></ul></div>
+        <div class="card"><h3>Diagnosis cepat</h3><ul><li><strong>OAuth gagal:</strong> cek redirect URI, app ID/secret, state expiry, dan clock server.</li><li><strong>Connected tetapi tidak ada event:</strong> buka diagnostics subscription, cek webhook fields, mode app, mapping IG user, dan signature logs.</li><li><strong>Automation tidak match:</strong> cek media ID, status aktif, keyword normalization, dan urutan rule.</li><li><strong>DM gagal:</strong> cek permission, token expiry, Graph API response/rate limit, serta reply log FAILED.</li><li><strong>Agency tidak bisa akses:</strong> verifikasi <code>agencyLicenseCode</code> instance sama dengan license session.</li></ul></div>
+      </div>
+      <div class="callout warning"><strong>Status production saat ini:</strong> inbox DM teks sudah memiliki durable event, idempotent message, retry worker, delivery attempt, dan realtime. Comment-to-DM lama masih diproses synchronous; token lifecycle, DLQ operator, retention job, observability, dan load test tetap menjadi release gate untuk volume tinggi.</div>
+    </section>
+
+    <section id="whatsapp" data-searchable>
+      <div class="eyebrow">07 · WA runtime</div><h2>WhatsApp service</h2>
+      <p class="section-intro"><code>wa-sevenlead</code> adalah runtime instance-centric. Semua scope tenant/agency diputuskan di Sevenlead sebelum request sampai ke service ini.</p>
+      <div class="grid three">
+        <div class="card"><span class="badge ok">Implemented</span><h3>Startup recovery</h3><p>Mengambil instance tenant aktif dan koneksi admin dari Sevenlead, membuat ulang client, retry 5 kali dengan jeda 5 detik.</p></div>
+        <div class="card"><span class="badge ok">Implemented</span><h3>Runtime watchdog</h3><p>Setiap 45 detik memeriksa state client tenant. Runtime yang keluar dari CONNECTED menjalani soft recovery.</p></div>
+        <div class="card"><span class="badge warn">Single-node</span><h3>Session placement</h3><p>Client map berada di memory dan LocalAuth di disk lokal. Belum ada distributed ownership/lease untuk banyak replica.</p></div>
+      </div>
+      <h3>Lifecycle event</h3>
+      <div class="diagram"><div class="flow"><div class="node"><b>CLIENT_CREATED</b>LocalAuth + headless Chromium</div><div class="arrow">→</div><div class="node"><b>QR_READY</b>dedupe + throttle 8s</div><div class="arrow">→</div><div class="node"><b>AUTHENTICATED</b>callback backend</div><div class="arrow">→</div><div class="node"><b>READY</b>identity + CONNECTED</div><div class="arrow">→</div><div class="node"><b>RECOVERY</b>disconnect/watchdog</div></div></div>
+      <h3>Endpoint internal WA service</h3>
+      <div class="table-wrap"><table><thead><tr><th>Method/path</th><th>Fungsi</th><th>Auth</th><th>Catatan</th></tr></thead><tbody>
+        <tr><td><code>POST /instances</code></td><td>Create/start client tenant</td><td><code>x-api-key</code></td><td>Butuh instanceId, externalId, tenantId</td></tr>
+        <tr><td><code>POST /instances/logout-session</code></td><td>Logout dan pairing ulang</td><td><code>x-api-key</code></td><td>Menghapus LocalAuth terkait</td></tr>
+        <tr><td><code>POST /instances/clear-session</code></td><td>Hapus session tanpa recreate</td><td><code>x-api-key</code></td><td>Operasi lifecycle internal</td></tr>
+        <tr><td><code>POST /instances/delete</code></td><td>Hapus runtime + session</td><td><code>x-api-key</code></td><td>Dipanggil setelah policy deletion</td></tr>
+        <tr><td><code>POST /instances/groups</code></td><td>Ambil grup</td><td><code>x-api-key</code></td><td>503 ketika runtime recovering</td></tr>
+        <tr><td><code>POST /instances/sync-contacts</code></td><td>Chat → candidate contact</td><td><code>x-api-key</code></td><td>PERSONAL/GROUP</td></tr>
+        <tr><td><code>POST /instances/group-members</code></td><td>Ambil anggota grup</td><td><code>x-api-key</code></td><td>Batch group IDs</td></tr>
+        <tr><td><code>POST /instances/lookup-numbers</code></td><td>Cek registrasi WhatsApp</td><td><code>x-api-key</code></td><td>Dipakai validator</td></tr>
+        <tr><td><code>POST /instances/chats</code></td><td>Inbox snapshot</td><td><code>x-api-key</code></td><td>Cache 30–45 detik</td></tr>
+        <tr><td><code>POST /instances/chat-messages</code></td><td>Riwayat chat</td><td><code>x-api-key</code></td><td>Cache 5 detik</td></tr>
+        <tr><td><code>POST /messages/send</code></td><td>Kirim text/media personal/group</td><td><code>x-api-key</code></td><td>Menerima blastId + recipientId untuk ACK</td></tr>
+        <tr><td><code>POST /admin/whatsapp/connect</code></td><td>Runtime WA admin</td><td><code>x-api-key</code></td><td>Namespace LocalAuth admin</td></tr>
+      </tbody></table></div>
+      <div class="callout danger"><strong>Production gap:</strong> tidak ada <code>/health</code> atau readiness endpoint pada WA service, tidak ada graceful shutdown handler, dan file tracker ditulis sinkron pada setiap track/ACK. Untuk horizontal scale diperlukan shared session storage, distributed instance ownership, durable ACK/outbox, dan health probes.</div>
+    </section>
+
+    <section id="workers" data-searchable>
+      <div class="eyebrow">08 · Background processing</div><h2>Worker bisnis dan job loop</h2>
+      <p class="section-intro">Worker dijalankan sebagai proses terpisah melalui script npm. Mode default memproses sekali; flag <code>--loop</code> mengulang setelah proses sebelumnya selesai, sehingga satu proses tidak overlap dengan dirinya sendiri.</p>
+      <div class="table-wrap"><table><thead><tr><th>Worker</th><th>Sumber job</th><th>Default</th><th>Lock/retry</th><th>Tujuan</th></tr></thead><tbody>
+        <tr><td><code>worker:blastjobs:loop</code></td><td>Central <code>blast_recipient_jobs</code></td><td>25 / 30s</td><td>SKIP LOCKED, lease 10m, 5/30m, max 3</td><td>Blast recipient → WA</td></tr>
+        <tr><td><code>worker:sequencejobs:loop</code></td><td>Central sequence queue</td><td>25 / 30s</td><td>Central claim + tenant claim</td><td>Follow-up otomatis kontak</td></tr>
+        <tr><td><code>worker:phonevalidatorjobs:loop</code></td><td>Central validator queue</td><td>5 job × 100 item / 15s</td><td>Claim job + item batch</td><td>Lookup nomor via WA</td></tr>
+        <tr><td><code>worker:adminnotifications:loop</code></td><td>Central admin jobs</td><td>5s</td><td>Service-managed retry</td><td>Notifikasi administratif</td></tr>
+        <tr><td><code>worker:adminbroadcasts:loop</code></td><td>Central recipients</td><td>25 / 10s (env)</td><td>Runtime claim + retry</td><td>Broadcast dari admin WA</td></tr>
+        <tr><td><code>worker:instancetimeouts:loop</code></td><td>Central runtime snapshot</td><td>20 / 5s (env)</td><td>Claim due snapshot</td><td>Timeout pairing/koneksi</td></tr>
+        <tr><td><code>worker:subscriptionaccess:loop</code></td><td>Central tenants</td><td>25 / 60s</td><td>Sequential reconcile</td><td>Blokir scope, clear session, cancel jobs</td></tr>
+      </tbody></table></div>
+      <h3>Pattern queue yang dipakai</h3>
+      <div class="grid two"><div class="card"><h4>Central pointer queue</h4><p>Central menyimpan <code>tenantId + resourceId + scheduledAt + status</code>. Worker tidak lagi scan seluruh database tenant. Detail dan monitoring tetap dibaca dari tenant DB.</p></div><div class="card"><h4>Double claim</h4><p>Job di-claim di central, lalu resource tenant di-claim lagi. Jika state tenant berubah, pointer central direkonsiliasi menjadi pending/paused/sent/failed/canceled.</p></div></div>
+      <div class="callout warning"><strong>Scaling rule:</strong> worker blast/sequence/validator aman untuk beberapa proses selama semuanya memakai central claim dengan <code>FOR UPDATE SKIP LOCKED</code>. Namun throughput outbound tetap dibatasi oleh ownership WA instance dan belum ada rate limiter global per nomor/instance.</div>
+    </section>
+
+    <section id="blast" data-searchable>
+      <div class="eyebrow">09 · Blast deep dive</div><h2>Blast dari compose sampai receipt</h2>
+      <div class="diagram"><div class="flow"><div class="node"><b>1. Compose</b>source + messages<br/>schedule + delay</div><div class="arrow">→</div><div class="node"><b>2. Snapshot</b>blast, batches,<br/>messages, recipients</div><div class="arrow">→</div><div class="node"><b>3. Enqueue</b>message logs +<br/>central pointers</div><div class="arrow">→</div><div class="node"><b>4. Claim</b>central then tenant<br/>lease 10m</div><div class="arrow">→</div><div class="node"><b>5. Send</b>template + watermark<br/>WA service</div><div class="arrow">→</div><div class="node"><b>6. Receipt</b>ACK/read + realtime<br/>final status</div></div></div>
+      <div class="timeline" style="margin-top:24px">
+        <div class="step"><h3>Create/publish</h3><p>Validasi instance connected, ownership agency, attachment, recipient source, batch allocation. DRAFT tidak membuat recipient. Publish menghasilkan status SCHEDULED dan recipient PENDING dalam transaction tenant.</p></div>
+        <div class="step"><h3>Scheduling</h3><p>Recipient dibagi ke explicit batch atau legacy batch size. Di dalam batch, jadwal berikutnya bertambah random antara <code>minContactDelayMs</code> dan <code>maxContactDelayMs</code>. Antar-message memakai delay tersendiri.</p></div>
+        <div class="step"><h3>Claim</h3><p>Central claim due pointer dengan row lock; tenant claim hanya menerima blast SCHEDULED/PROCESSING dan recipient PENDING due. Lock yang lebih lama dari 10 menit dianggap stale.</p></div>
+        <div class="step"><h3>Execution</h3><p>Worker cek subscription per workspace/agency, resolve watermark, render placeholder kontak, build attachment, lalu mengirim bubble berurutan. Recipient diproses sequential dalam satu worker batch.</p></div>
+        <div class="step"><h3>Retry/finalize</h3><p>Error retryable kembali PENDING pada +5 atau +30 menit. Attempt ke-3 terminal FAILED. Blast menjadi COMPLETED bila tidak ada pending, atau COMPLETED_WITH_ERRORS bila terdapat failed.</p></div>
+        <div class="step"><h3>ACK/read</h3><p>WA tracker mengasosiasikan message ID dengan recipient selama 7 hari. ACK ≥2 mengisi deliveredAt; event READ mengisi readAt. Realtime update dipublish setelah tenant state tersimpan.</p></div>
+      </div>
+      <div class="grid three"><div class="card"><h4>Pause</h4><p>Tenant recipient dan pointer central menjadi PAUSED; PROCESSING yang terlihat oleh executor dilepas.</p></div><div class="card"><h4>Resume</h4><p>Seluruh waktu pending/batch digeser relatif terhadap jadwal pending pertama agar interval tetap terjaga.</p></div><div class="card"><h4>Stop/delete</h4><p>Pending/processing dicancel; central pointers dan message logs diselaraskan. Data bisnis menggunakan soft delete.</p></div></div>
+      <div class="callout danger"><strong>Semantik delivery penting:</strong> worker menandai SENT sesudah HTTP send sukses, tetapi crash setelah WhatsApp menerima pesan dan sebelum status tersimpan dapat menyebabkan retry dan duplikasi. Saat ini belum ada end-to-end idempotency key yang dipaksakan oleh WA service.</div>
+    </section>
+
+    <section id="api" data-searchable>
+      <div class="eyebrow">10 · API catalog</div><h2>Endpoint utama Sevenlead</h2>
+      <p class="section-intro">Daftar ini memprioritaskan kontrak yang membentuk alur utama. Route handler Next.js mengikuti response <code>{ success, message, data }</code> melalui helper standar.</p>
+      <div class="endpoint-toolbar"><button class="filter active" data-filter="all">Semua</button><button class="filter" data-filter="user">User</button><button class="filter" data-filter="internal">Internal</button><button class="filter" data-filter="external">External</button><button class="filter" data-filter="admin">Admin</button></div>
+      <div class="table-wrap"><table id="endpointTable"><thead><tr><th>Endpoint</th><th>Scope</th><th>Fungsi</th><th>Auth</th></tr></thead><tbody>
+        <tr data-kind="user"><td><span class="method post">POST</span> <code>/api/auth/login</code></td><td>User</td><td>Login membership, upsert tenant, issue JWT</td><td>Public + upstream API secret</td></tr>
+        <tr data-kind="user"><td><span class="method get">GET</span>/<span class="method post">POST</span> <code>/api/v1/instances</code></td><td>User</td><td>List/create instance</td><td>Session + scope</td></tr>
+        <tr data-kind="user"><td><span class="method get">GET</span>/<span class="method patch">PATCH</span>/<span class="method delete">DELETE</span> <code>/api/v1/instances/:id</code></td><td>User</td><td>Detail/update/delete instance</td><td>Session + ownership</td></tr>
+        <tr data-kind="user"><td><span class="method get">GET</span> <code>/api/v1/instances/:id/qr</code></td><td>User</td><td>QR pairing</td><td>Session + ownership</td></tr>
+        <tr data-kind="user"><td><span class="method post">POST</span> <code>/api/v1/instances/:id/logout-session</code></td><td>User</td><td>Reset pairing session</td><td>Session + ownership</td></tr>
+        <tr data-kind="user"><td><span class="method get">GET</span>/<span class="method post">POST</span> <code>/api/v1/contact-lists</code></td><td>User</td><td>Segmentasi/list</td><td>Session + instance scope</td></tr>
+        <tr data-kind="user"><td><span class="method get">GET</span>/<span class="method post">POST</span> <code>/api/v1/contacts</code></td><td>User</td><td>List/create contact</td><td>Session + list scope</td></tr>
+        <tr data-kind="user"><td><span class="method post">POST</span> <code>/api/v1/contacts/import</code></td><td>User</td><td>Import kontak file</td><td>Session</td></tr>
+        <tr data-kind="user"><td><span class="method post">POST</span> <code>/api/v1/contacts/whatsapp/sync-contacts</code></td><td>User</td><td>Import chat WhatsApp</td><td>Session + connected instance</td></tr>
+        <tr data-kind="user"><td><span class="method get">GET</span>/<span class="method post">POST</span> <code>/api/v1/blasts</code></td><td>User</td><td>List/create/publish blast</td><td>Session + scope</td></tr>
+        <tr data-kind="user"><td><span class="method post">POST</span> <code>/api/v1/blasts/recipients/preview</code></td><td>User</td><td>Hitung recipient eligible</td><td>Session + scope</td></tr>
+        <tr data-kind="user"><td><span class="method post">POST</span> <code>/api/v1/blasts/:id/pause|resume|stop</code></td><td>User</td><td>State control blast</td><td>Session + blast scope</td></tr>
+        <tr data-kind="user"><td><span class="method get">GET</span> <code>/api/v1/chat/conversations</code></td><td>User</td><td>Inbox conversation</td><td>Session + instance scope</td></tr>
+        <tr data-kind="user"><td><span class="method post">POST</span> <code>/api/v1/chat/conversations/:id/messages</code></td><td>User</td><td>Outbound chat</td><td>Session + conversation scope</td></tr>
+        <tr data-kind="user"><td><span class="method get">GET</span>/<span class="method post">POST</span> <code>/api/v1/bots</code></td><td>User</td><td>Bot automation</td><td>Session + scope</td></tr>
+        <tr data-kind="user"><td><span class="method get">GET</span>/<span class="method post">POST</span> <code>/api/v1/phone-validator/jobs</code></td><td>User</td><td>Validasi nomor async</td><td>Session + scope</td></tr>
+        <tr data-kind="user"><td><span class="method get">GET</span>/<span class="method delete">DELETE</span> <code>/api/v1/instances/:id/social/instagram</code></td><td>User</td><td>Status/disconnect akun Instagram</td><td>Session + instance scope</td></tr>
+        <tr data-kind="user"><td><span class="method post">POST</span> <code>/api/v1/instances/:id/social/instagram/oauth/start</code></td><td>User</td><td>Mulai Instagram Login</td><td>Session + instance scope</td></tr>
+        <tr data-kind="user"><td><span class="method get">GET</span>/<span class="method post">POST</span> <code>/api/v1/instances/:id/social/instagram/comment-automations</code></td><td>User</td><td>Kelola comment-to-DM automation</td><td>Session + instance scope</td></tr>
+        <tr data-kind="internal"><td><span class="method patch">PATCH</span> <code>/api/v1/instances/connect|authenticated|disconnected|recovering</code></td><td>Internal</td><td>Callback lifecycle WA</td><td><code>x-api-key</code></td></tr>
+        <tr data-kind="internal"><td><span class="method post">POST</span> <code>/api/v1/instances/qr</code></td><td>Internal</td><td>Simpan/update QR</td><td><code>x-api-key</code></td></tr>
+        <tr data-kind="internal"><td><span class="method post">POST</span> <code>/api/v1/blasts/recipients/events</code></td><td>Internal</td><td>ACK/read blast</td><td><code>x-api-key</code></td></tr>
+        <tr data-kind="internal"><td><span class="method post">POST</span> <code>/api/v1/internal/chat/messages</code></td><td>Internal</td><td>Persist incoming/outgoing WA</td><td><code>x-api-key</code></td></tr>
+        <tr data-kind="internal"><td><span class="method post">POST</span> <code>/api/v1/internal/chat/messages/ack</code></td><td>Internal</td><td>Update message ACK</td><td><code>x-api-key</code></td></tr>
+        <tr data-kind="internal"><td><span class="method get">GET</span>/<span class="method post">POST</span> <code>/api/v1/internal/instagram/webhook</code></td><td>Meta webhook</td><td>Verification dan comment event</td><td>Verify token / HMAC</td></tr>
+        <tr data-kind="external"><td><span class="method get">GET</span>/<span class="method post">POST</span> <code>/api/v1/external/audience/segments</code></td><td>External</td><td>List/create segment</td><td>Bearer per instance</td></tr>
+        <tr data-kind="external"><td><span class="method get">GET</span>/<span class="method post">POST</span> <code>/api/v1/external/audience/contacts</code></td><td>External</td><td>List/upsert contact</td><td>Bearer per instance</td></tr>
+        <tr data-kind="external"><td><span class="method post">POST</span> <code>/api/v1/external/messages/send</code></td><td>External</td><td>Direct send personal/group</td><td>Bearer per instance</td></tr>
+        <tr data-kind="external"><td><span class="method get">GET</span> <code>/api/v1/external/instance/connection</code></td><td>External</td><td>Connection probe</td><td>Bearer per instance</td></tr>
+        <tr data-kind="external"><td><span class="method post">POST</span> <code>/api/v1/external/membership/create_db</code></td><td>External</td><td>Provision tenant database</td><td>Membership Bearer</td></tr>
+        <tr data-kind="external"><td><span class="method post">POST</span> <code>/api/v1/external/membership/agency-license-sync</code></td><td>External</td><td>Refresh context dan reconcile quota/expiry agency</td><td>Membership Bearer</td></tr>
+        <tr data-kind="admin"><td><span class="method get">GET</span>/<span class="method post">POST</span> <code>/api/admin/broadcasts</code></td><td>Admin</td><td>Admin broadcast</td><td>Admin session</td></tr>
+        <tr data-kind="admin"><td><span class="method get">GET</span>/<span class="method post">POST</span> <code>/api/admin/whatsapp</code></td><td>Admin</td><td>Admin WA connection</td><td>Admin session</td></tr>
+        <tr data-kind="user"><td><span class="method get">GET</span> <code>/api/v1/realtime/token</code></td><td>User</td><td>Short-lived socket token</td><td>Session</td></tr>
+      </tbody></table></div>
+    </section>
+
+    <section id="data" data-searchable>
+      <div class="eyebrow">11 · Data architecture</div><h2>Database dan isolasi tenant</h2>
+      <p class="section-intro">Produk KelolaPesan memakai pola central registry + database per tenant. Central membantu aplikasi menemukan tenant dan mengatur pekerjaan lintas database; tenant DB menyimpan data bisnis harian milik workspace. Dengan pola ini, data customer antarworkspace tetap terisolasi walaupun aplikasi dan worker-nya sama.</p>
+      <div class="grid two">
+        <div class="card"><h3>Central models</h3><p class="muted">Tenant, UserOnboardingProgress, ExternalInstanceApiCredential, InstanceMapping, InstagramAccountMapping, InstanceRuntimeSnapshot, BlastRecipientJob, ContactListSequenceJobQueue, PhoneValidationJobQueue, policy settings, Admin, AdminWhatsappConnection, AdminNotificationJob, AdminBroadcast + recipient.</p></div>
+        <div class="card"><h3>Tenant models</h3><p class="muted">Instance, social/Instagram automation, ContactList/Field/Contact, ChatConversation/Message/Exclusion, MessageLog/Attempt, Bot/Scope/Action/Message, Sequence/Job, Blast/Batch/Message/Recipient, PhoneValidationJob/Item, Attachment.</p></div>
+      </div>
+      <div class="grid two">
+        <div class="card"><h3>Connection resolution</h3><ol><li>User login menghasilkan session berisi <code>tenantId</code>, <code>licenseCode</code>, dan mode akses.</li><li>Service mengambil tenant registry dari central DB.</li><li><code>getTenantPrisma(tenantId)</code> membangun koneksi ke database tenant yang benar.</li><li>Service menjalankan query tenant dengan validasi ownership/scope.</li><li>Jika perlu event realtime atau queue, pointer global disimpan di central setelah state tenant konsisten.</li></ol></div>
+        <div class="card"><h3>Data placement rule</h3><ul><li>Central: metadata global, lookup lintas tenant, credential, mapping, queue pointer, admin, dan status runtime.</li><li>Tenant: data operasional user/workspace, konten pesan, kontak, automation, log, dan resource yang perlu isolasi customer.</li><li>Jangan membaca tenant DB berdasarkan parameter bebas dari client; selalu resolve dari session dan central registry.</li><li>Jangan menyimpan payload bisnis besar di central jika cukup disimpan di tenant lalu central hanya menyimpan pointer.</li></ul></div>
+      </div>
+      <h3>Aturan isolasi</h3><ul><li>Jangan membuat Prisma tenant global tunggal; resolve dari central registry.</li><li>Cache key client memakai host + port + db + username; password tidak ditampilkan di log.</li><li>Worker melepaskan client tenant setelah selesai agar pool tidak terus bertambah.</li><li>Resource operasional aktif wajib memfilter <code>deletedAt: null</code>.</li><li>Mode AGENCY membatasi instance dengan <code>agencyLicenseCode</code>; resource turunan mengikuti ownership chain.</li><li>Cache context wajib per <code>tenantId + licenseCode</code>, bukan tenant saja.</li></ul>
+      <div class="callout warning"><strong>Connection budget:</strong> default tenant connection limit adalah 2 per cached Prisma client. Total koneksi kasar = jumlah proses aplikasi/worker × tenant client aktif × connection limit. Pantau <code>activeTenantClients</code> dan kapasitas PostgreSQL sebelum menaikkan concurrency worker.</div>
+    </section>
+
+    <section id="migration-dev" data-searchable>
+      <div class="eyebrow">12 · Development migration</div><h2>Migrasi schema saat development</h2>
+      <div class="callout"><strong>Dua schema, dua migration history.</strong> Perubahan registry tenant, credential external API, mapping Instagram/WA, dan global queue masuk <code>prisma/central</code>. Perubahan data operasional workspace seperti instance, contact, blast, sequence, inbox, dan automation masuk <code>prisma/tenant</code>.</div>
+      <div class="callout warning"><strong>Setiap penambahan struktur wajib lewat script migration.</strong> Jika menambah tabel/kolom/enum/index di central, update <code>prisma/central/schema.prisma</code> lalu jalankan script central migration. Jika menambah struktur tenant, update <code>prisma/tenant/schema.prisma</code>, buat migration tenant, lalu siapkan rollout production dengan script tenant deploy. Jangan ubah struktur database manual tanpa migration yang tercatat di repo.</div>
+      <div class="grid two"><div class="card"><h3>Central schema</h3><p class="small muted">Dipakai untuk satu database pusat. Migration cukup dijalankan sekali per environment.</p><pre><code>npm run prisma:migrate:central -- --name &lt;nama_migration&gt;
+npm run prisma:generate:central
+npm run typecheck</code></pre></div><div class="card"><h3>Tenant schema</h3><p class="small muted">Dipakai untuk template semua database tenant. Migration dev dibuat sekali, lalu production rollout memakai script tenant deploy.</p><pre><code>npm run prisma:migrate:tenant -- --name &lt;nama_migration&gt;
+npm run prisma:generate:tenant
+npm run typecheck</code></pre></div></div>
+      <h3>Checklist developer</h3><ol><li>Tentukan target schema: central atau tenant. Jangan menaruh data operasional tenant di central kecuali memang berupa pointer/queue global.</li><li>Pastikan strategi kompatibilitas: additive dulu untuk field baru, hindari langsung <code>NOT NULL</code> tanpa default/backfill.</li><li>Edit schema secara minimal dan buat migration dengan nama deskriptif.</li><li>Review file SQL di folder migration: potensi lock, table rewrite, drop column, rename, enum change, index besar, dan foreign key.</li><li>Uji migration pada database lokal yang punya data representatif, bukan database kosong saja.</li><li>Generate Prisma client sesuai schema yang berubah, lalu jalankan typecheck/lint/build sesuai scope release.</li><li>Jika tenant schema berubah, tulis catatan release: fitur terdampak, tabel berubah, command production, batch size awal, dan smoke test.</li></ol>
+      <div class="grid two">
+        <div class="card"><h3>Development smoke test</h3><ul><li>Login REGULAR dan AGENCY jika migration menyentuh resource tenant.</li><li>Jalankan minimal satu flow create/read/update pada tabel baru atau field baru.</li><li>Pastikan worker yang membaca schema baru tidak crash saat data lama masih kosong.</li><li>Untuk perubahan queue, uji claim/retry satu job sample.</li></ul></div>
+        <div class="card"><h3>Larangan normal flow</h3><ul><li>Jangan memakai <code>prisma db push</code> sebagai workflow development/release normal.</li><li>Jangan edit migration lama yang sudah pernah masuk branch/release bersama.</li><li>Jangan membuat migration destruktif tanpa rencana expand-contract dan backup.</li><li>Jangan deploy kode yang langsung mewajibkan semua tenant sudah berada di schema terbaru.</li></ul></div>
+      </div>
+      <div class="callout warning"><strong>Catatan tenant.</strong> Endpoint membership <code>create_db</code> sudah memakai <code>migrate deploy</code>, sehingga tenant baru otomatis punya schema dan history migration yang benar. Untuk tenant existing di production, migration tetap harus di-rollout ke semua DB tenant melalui script <code>tenant:schema:deploy</code>.</div>
+    </section>
+
+    <section id="migration-prod" data-searchable>
+      <div class="eyebrow">13 · Production runbook</div><h2>Migrasi production untuk seluruh tenant</h2>
+      <p class="section-intro">Production memakai dua tahap: deploy migration central sekali, lalu rollout migration tenant ke semua database tenant. Karena tenant sudah up-to-date, workflow normal tidak memakai <code>tenant:schema:sync</code>; script itu hanya disimpan untuk legacy repair/catch-up bila suatu hari ditemukan tenant drift.</p>
+      <div class="callout warning"><strong>Rule utama production.</strong> Perubahan tenant schema tidak selesai hanya dengan deploy aplikasi. Setelah code release, jalankan <code>tenant:schema:deploy</code> sampai semua tenant DB menerima Prisma migration terbaru, lalu audit ulang hasilnya.</div>
+      <div class="grid two">
+        <div class="card"><h3>Jika struktur central berubah</h3><p class="small muted">Contoh: tambah tabel mapping global, credential, queue pointer, admin policy, atau registry field. Migration dijalankan sekali ke central DB sebelum/bersamaan dengan deploy app kompatibel.</p><pre><code>npm run prisma:deploy:central
+npm run prisma:generate:central</code></pre></div>
+        <div class="card"><h3>Jika struktur tenant berubah</h3><p class="small muted">Contoh: tambah field instance, contact, blast, inbox, automation, atau table operasional lain. Migration harus dijalankan ke semua tenant DB melalui script rollout.</p><pre><code>npm run tenant:schema:deploy -- --limit=10 --offset=0 --apply --stop-on-error --json
+npm run tenant:schema:audit -- --limit=10 --offset=0 --json</code></pre></div>
+      </div>
+
+      <h3>A. Preflight sebelum deploy</h3>
+      <div class="grid two">
+        <div class="card"><h4>Review teknis</h4><ul><li>Pastikan migration SQL sudah direview: lock, rewrite table, enum, index besar, foreign key, drop/rename, dan <code>NOT NULL</code>.</li><li>Gunakan pola expand-contract untuk breaking change: tambah kolom/tabel dulu, deploy app kompatibel, backfill, verifikasi, baru contract di release berikutnya.</li><li>Pastikan code yang akan naik aman saat sebagian tenant masih schema lama selama rollout sequential.</li><li>Siapkan daftar smoke test fitur yang menyentuh tabel berubah.</li></ul></div>
+        <div class="card"><h4>Operational gate</h4><ul><li>Backup/PITR aktif dan restore drill tersedia.</li><li>Maintenance window atau low-traffic window disepakati untuk migration berisiko.</li><li>Owner release, owner database, dan incident commander jelas.</li><li>Monitoring app/worker/DB siap: error rate, latency, connection pool, lock, failed job, dan worker retry.</li></ul></div>
+      </div>
+      <pre><code># Audit tenant sebelum rollout
+npm run tenant:schema:audit -- --limit=25 --offset=0 --json</code></pre>
+      <p class="muted small">Output audit disimpan sebagai artifact release. Status ideal sebelum deploy normal adalah tenant tidak drift secara struktural; jika ada <code>failed</code> atau drift tidak terduga, investigasi dulu sebelum lanjut.</p>
+
+      <h3>B. Urutan deploy normal</h3>
+      <div class="timeline">
+        <div class="step"><h4>1. Deploy central migration</h4><p>Jalankan sekali untuk database pusat karena central menyimpan tenant registry, mapping, credential, dan queue global.</p><pre><code>npm run prisma:deploy:central</code></pre></div>
+        <div class="step"><h4>2. Deploy aplikasi kompatibel</h4><p>Naikkan code yang toleran terhadap schema lama dan baru. Ini penting karena rollout tenant berjalan batch/sequential.</p></div>
+        <div class="step"><h4>3. Canary tenant</h4><p>Mulai dari tenant internal/sample. Pakai <code>--stop-on-error</code> agar proses berhenti saat satu tenant gagal.</p><pre><code>npm run tenant:schema:deploy -- --tenant-ids=&lt;tenant-id-canary&gt; --apply --stop-on-error --json</code></pre></div>
+        <div class="step"><h4>4. Audit canary</h4><p>Pastikan canary sudah <code>up_to_date</code>, lalu jalankan smoke test fitur terkait.</p><pre><code>npm run tenant:schema:audit -- --tenant-ids=&lt;tenant-id-canary&gt; --json</code></pre></div>
+      </div>
+
+      <h3>C. Rollout semua tenant dengan batch</h3>
+      <p>Naikkan batch secara konservatif. Mulai dari 10 tenant, observasi metrik, baru tambah ukuran batch bila migration ringan dan database stabil.</p>
+      <pre><code># Batch 1
+npm run tenant:schema:deploy -- --limit=10 --offset=0 --apply --stop-on-error --json
+
+# Audit batch 1
+npm run tenant:schema:audit -- --limit=10 --offset=0 --json
+
+# Batch 2
+npm run tenant:schema:deploy -- --limit=10 --offset=10 --apply --stop-on-error --json
+
+# Audit batch 2
+npm run tenant:schema:audit -- --limit=10 --offset=10 --json</code></pre>
+      <div class="grid two">
+        <div class="card"><h4>Artifact wajib</h4><ul><li>Output <code>--json</code> dari audit awal.</li><li>Output <code>--json</code> dari setiap batch deploy.</li><li>Output <code>--json</code> dari audit setelah batch.</li><li>Catatan tenant failed: tenantId, dbName, migration, error, waktu, dan keputusan fix.</li></ul></div>
+        <div class="card"><h4>Kapan batch boleh dinaikkan?</h4><ul><li>Tidak ada tenant failed.</li><li>Error rate aplikasi/worker normal.</li><li>DB lock dan connection pool stabil.</li><li>Smoke test fitur utama lulus.</li><li>Tidak ada alert dari WA, Instagram, realtime, atau worker yang terkait schema baru.</li></ul></div>
+      </div>
+
+      <h3>D. Jika migration tenant gagal</h3>
+      <div class="timeline">
+        <div class="step"><h4>1. Stop dan isolasi</h4><p>Karena memakai <code>--stop-on-error</code>, proses berhenti di tenant bermasalah. Jangan lanjut ke offset berikutnya sebelum penyebab jelas.</p></div>
+        <div class="step"><h4>2. Diagnosis</h4><p>Cek apakah error berasal dari lock, permission DB, migration history, data duplicate, constraint violation, long-running transaction, atau SQL destruktif.</p></div>
+        <div class="step"><h4>3. Fix targeted</h4><p>Lakukan fix paling kecil ke tenant tersebut. Hindari perubahan manual yang tidak terdokumentasi; jika perlu manual SQL, simpan sebagai incident note.</p></div>
+        <div class="step"><h4>4. Retry tenant tunggal</h4><pre><code>npm run tenant:schema:deploy -- --tenant-ids=&lt;tenant-id&gt; --apply --stop-on-error --json
+npm run tenant:schema:audit -- --tenant-ids=&lt;tenant-id&gt; --json</code></pre></div>
+      </div>
+
+      <h3>E. Post-deploy verification</h3>
+      <ol><li>Jalankan audit final untuk seluruh tenant secara batch sampai semua tenant terverifikasi.</li><li>Smoke test login REGULAR dan AGENCY.</li><li>Smoke test instance WhatsApp, direct chat, blast canary, realtime update, dan worker queue jika schema terkait.</li><li>Jika migration menyentuh Instagram, uji dashboard, OAuth status, media list, webhook verification, dan automation sample.</li><li>Pastikan worker tidak menghasilkan spike failed/retry setelah schema berubah.</li><li>Update release note dengan daftar migration, batch yang dijalankan, tenant failed/fixed, dan hasil audit final.</li></ol>
+
+      <h3>F. One-time legacy tools</h3>
+      <div class="callout"><strong>Tidak dipakai untuk flow normal saat ini.</strong> <code>tenant:schema:sync</code> adalah alat catch-up berbasis <code>db push</code> untuk tenant lama yang drift. Karena tenant sudah up-to-date, release normal harus memakai audit → deploy → audit, bukan sync.</div>
+      <div class="grid two">
+        <div class="card"><h4>Audit baseline legacy</h4><pre><code>npm run tenant:migration-baseline:audit -- --limit=25 --json</code></pre><p class="small muted">Dipakai hanya jika ada tenant lama yang schema-nya benar tetapi history <code>_prisma_migrations</code> belum lengkap.</p></div>
+        <div class="card"><h4>Baseline legacy</h4><pre><code>npm run tenant:migration-baseline:apply -- --tenant-ids=&lt;tenant-id&gt; --apply --stop-on-error --json</code></pre><p class="small muted">Hanya boleh setelah tenant tersebut terbukti <code>up_to_date</code>. Jangan baseline tenant yang masih drift.</p></div>
+      </div>
+
+      <h3>Urutan deploy yang aman</h3>
+      <div class="diagram"><div class="flow"><div class="node"><b>1. Expand</b>migration additive<br/>nullable/new table</div><div class="arrow">→</div><div class="node"><b>2. Compatible app</b>read/write old + new</div><div class="arrow">→</div><div class="node"><b>3. Backfill</b>bounded + resumable</div><div class="arrow">→</div><div class="node"><b>4. Verify</b>all tenants + metrics</div><div class="arrow">→</div><div class="node"><b>5. Contract</b>drop/NOT NULL<br/>release berikutnya</div></div></div>
+      <div class="callout danger"><strong>Jangan mengandalkan rollback migration destruktif.</strong> Untuk partial rollout, aplikasi harus toleran terhadap beberapa versi schema. Pilih forward-fix untuk perubahan yang sudah menyentuh data; restore hanya dengan keputusan incident commander dan dampak tenant yang jelas.</div>
+      <h3>Known operational limits</h3><ul><li>CLI sequential—aman namun rollout banyak tenant dapat lama; gunakan batch/offset dan observasi.</li><li>Registry menyimpan credential DB tenant dalam central DB; akses dan backup central harus sangat dibatasi.</li><li>Deteksi “destructive” berbasis pola SQL dan tidak menggantikan review DBA.</li><li><code>--allow-destructive</code> adalah override tajam; wajib change approval, backup, dan rollback/forward-fix plan tertulis.</li><li>Provisioning baru memakai migration deploy dan advisory lock, tetapi cleanup orphan DB masih manual.</li><li>Selama rollout tenant berjalan, aplikasi dan worker harus siap menghadapi mixed schema version sementara.</li></ul>
+    </section>
+
+    <section id="external-api" data-searchable>
+      <div class="eyebrow">14 · External integration</div><h2>External Instance / Workspace API</h2>
+      <p class="section-intro">Credential dibuat per instance, berprefix <code>sl_live_inst_</code>, secret diverifikasi dengan SHA-256 + timing-safe compare, dan scope tenant/instance/agency diambil dari credential—bukan dari request client.</p>
+      <div class="callout warning"><strong>Penyimpanan secret:</strong> API key disimpan terenkripsi AES-256-GCM agar UI dapat menampilkannya kembali, sekaligus secret hash untuk autentikasi. Lindungi <code>EXTERNAL_API_KEY_ENCRYPTION_SECRET</code> di secret manager dan rotasi dengan prosedur yang mempertimbangkan ciphertext lama.</div>
+      <h3>Quick start</h3><pre><code>Authorization: Bearer sl_live_inst_&lt;key-id&gt;_&lt;secret&gt;
+Content-Type: application/json</code></pre>
+      <div class="table-wrap"><table><thead><tr><th>Endpoint</th><th>Input utama</th><th>Perilaku</th></tr></thead><tbody>
+        <tr><td><code>GET /api/v1/external/instance/connection</code></td><td>Bearer</td><td>Probe status instance tanpa mengirim pesan.</td></tr>
+        <tr><td><code>GET /api/v1/external/audience/segments</code></td><td>Bearer</td><td>List contact list milik instance.</td></tr>
+        <tr><td><code>POST /api/v1/external/audience/segments</code></td><td><code>{ name }</code></td><td>Membuat segment terikat instance.</td></tr>
+        <tr><td><code>GET /api/v1/external/audience/contacts</code></td><td><code>segmentId,page,limit,search</code></td><td>Pagination contact dan validasi segment milik instance.</td></tr>
+        <tr><td><code>POST /api/v1/external/audience/contacts</code></td><td>segment + personal/group identity</td><td>Upsert; soft-deleted contact dapat direstore.</td></tr>
+        <tr><td><code>POST /api/v1/external/messages/send</code></td><td>targetType/value, message/attachment</td><td>Direct send setelah instance connected.</td></tr>
+      </tbody></table></div>
+      <h3>Contoh direct send</h3><pre><code>curl --request POST \
+  --url https://&lt;sevenlead-host&gt;/api/v1/external/messages/send \
+  --header 'Authorization: Bearer &lt;API_KEY&gt;' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "targetType": "PERSONAL",
+    "targetValue": "6281234567890",
+    "message": "Halo dari sistem eksternal",
+    "referenceId": "order-2026-0001"
+  }'</code></pre>
+      <div class="grid two"><div class="card"><h3>Semantik saat ini</h3><ul><li>API key rotation merevoke key aktif sebelumnya.</li><li><code>lastUsedAt</code> diperbarui pada autentikasi.</li><li>Contact create adalah idempotent/upsert.</li><li><code>referenceId</code> hanya dikembalikan untuk trace; belum menjadi idempotency constraint.</li><li>Attachment base64 melewati request aplikasi dan WA service.</li></ul></div><div class="card"><h3>Consumer checklist</h3><ul><li>Simpan key hanya di backend/secret manager.</li><li>Gunakan timeout dan retry hanya untuk error transient.</li><li>Jangan blind retry direct send tanpa idempotency di sisi consumer.</li><li>Batasi ukuran attachment di sisi client.</li><li>Rotasi key saat bocor dan tangani 401 sebagai revoked/regenerated.</li></ul></div></div>
+      <div class="callout danger"><strong>Production gap:</strong> route external belum terlihat memiliki rate limiting, quota per key, request idempotency, atau audit event per direct-send. Tambahkan sebelum exposure publik/high-volume.</div>
+    </section>
+
+    <section id="operations" data-searchable>
+      <div class="eyebrow">15 · Operations</div><h2>Deployment, observability, dan startup</h2>
+      <h3>Process topology minimum</h3><div class="table-wrap"><table><thead><tr><th>Process</th><th>Command</th><th>Critical dependency</th></tr></thead><tbody>
+        <tr><td>Sevenlead web</td><td><code>npm run start</code></td><td>Central DB, tenant DB, membership; WA/socket sesuai fitur</td></tr>
+        <tr><td>WA service</td><td><code>npm run start</code> di wa-sevenlead</td><td>Persistent session volume, Sevenlead callback URL</td></tr>
+        <tr><td>Realtime</td><td><code>npm run realtime:start</code></td><td>JWT secret dan internal key sama dengan publisher</td></tr>
+        <tr><td>Workers</td><td><code>npm run worker:&lt;name&gt;:loop</code></td><td>Central + tenant DB; beberapa membutuhkan WA</td></tr>
+      </tbody></table></div>
+      <h3>Startup order</h3><ol><li>PostgreSQL central dan tenant tersedia.</li><li>Jalankan central migration, kemudian tenant rollout/audit.</li><li>Start Sevenlead sehingga callback endpoint siap.</li><li>Start realtime socket.</li><li>Start WA service dengan persistent volume; bootstrap akan restore client.</li><li>Start worker satu per satu dan observasi claim/error.</li><li>Smoke test login, instance, direct chat, blast canary, realtime.</li></ol>
+      <h3>Environment groups</h3><div class="grid three"><div class="card"><h4>Core</h4><p class="small muted">JWT_SECRET, CENTRAL_DATABASE_URL, DATABASE_URL/template, ADMIN_DATABASE_URL, tenant pool limits.</p></div><div class="card"><h4>Service auth</h4><p class="small muted">WA_SERVICE_URL/API_KEY, SEVENLEAD_API_KEY, REALTIME_INTERNAL_API_KEY, membership secret.</p></div><div class="card"><h4>External</h4><p class="small muted">Membership/auth URLs, Socket public URL, Meta app/webhook secrets, external API encryption secret.</p></div></div>
+      <h3>Minimum signals</h3><ul><li>Queue depth dan oldest scheduled age per queue/status.</li><li>Claimed/sent/failed/retried/canceled rate per worker.</li><li>WA connected runtime count, recovery count/duration, Chromium memory.</li><li>Callback failure/retry latency dari WA → Sevenlead.</li><li>Instagram webhook latency, signature failure, unmapped account, reply failure/rate limit, dan token expiry.</li><li>Tenant Prisma active clients dan DB pool saturation.</li><li>Tenant migration success/failure/drift count.</li><li>Realtime publish failure dan connected sockets/rooms.</li></ul>
+    </section>
+
+    <section id="attention" data-searchable>
+      <div class="eyebrow">16 · Production readiness</div><h2>Hal-hal yang perlu diperhatikan</h2>
+      <div class="card">
+        <div class="risk"><div class="sev critical">CRITICAL</div><div><strong>WA horizontal scaling</strong><br/><span class="muted small">Client ownership dan LocalAuth bersifat lokal.</span></div><div>Gunakan persistent/shared session strategy, distributed lease per instance, anti-affinity/consistent routing, dan fencing token agar satu instance tidak aktif di dua replica.</div></div>
+        <div class="risk"><div class="sev high">HIGH</div><div><strong>Blast exactly-once</strong><br/><span class="muted small">Crash window setelah send dapat menduplikasi.</span></div><div>Tambahkan idempotency key/outbox, durable send ledger di WA boundary, dan reconciliation berdasarkan WA message ID.</div></div>
+        <div class="risk"><div class="sev high">HIGH</div><div><strong>Instagram comment automation</strong><br/><span class="muted small">Comment-to-DM masih diproses synchronous.</span></div><div>Inbox DM teks sudah durable; lanjutkan pola yang sama ke komentar, tambah DLQ operator, token refresh worker, dan fast acknowledgement penuh.</div></div>
+        <div class="risk"><div class="sev high">HIGH</div><div><strong>External API abuse protection</strong><br/><span class="muted small">Belum ada rate/quota/idempotency yang terlihat.</span></div><div>Rate limit per key/instance, payload cap, audit trail, idempotency header, dan quota enforcement.</div></div>
+        <div class="risk"><div class="sev high">HIGH</div><div><strong>Migration mixed versions</strong><br/><span class="muted small">Rollout sequential menciptakan schema heterogen sementara.</span></div><div>Wajib expand-contract dan app compatibility; jangan deploy kode yang langsung menuntut kolom baru pada semua tenant.</div></div>
+        <div class="risk"><div class="sev medium">MEDIUM</div><div><strong>WA health/shutdown</strong><br/><span class="muted small">Tidak ada probe dan shutdown handler eksplisit.</span></div><div>Tambahkan liveness/readiness, stop accepting sends, drain request, destroy client secara terkontrol, flush tracker.</div></div>
+        <div class="risk"><div class="sev medium">MEDIUM</div><div><strong>Realtime multi-node</strong><br/><span class="muted small">Socket rooms hanya memory satu node.</span></div><div>Gunakan Redis/NATS adapter atau sticky single node dengan kapasitas/HA yang terdokumentasi.</div></div>
+        <div class="risk"><div class="sev medium">MEDIUM</div><div><strong>Tracker JSON</strong><br/><span class="muted small">Sync file I/O dan local TTL store.</span></div><div>Pindahkan message tracking ke durable store dengan unique key dan cleanup job; batasi pertumbuhan serta backup.</div></div>
+        <div class="risk"><div class="sev medium">MEDIUM</div><div><strong>Secrets dan central registry</strong><br/><span class="muted small">DB credential tenant dan decryptable API keys sensitif.</span></div><div>Encryption at rest/KMS, least privilege, secret rotation, masked logs, restricted backups, access audit.</div></div>
+      </div>
+      <h3>Release gate</h3><div class="grid two"><div class="card"><h4>Application</h4><ul><li>Typecheck, lint, build lulus.</li><li>Route baru tipis dan service scope-aware.</li><li>Soft-delete dan agency path diuji.</li><li>Retry/idempotency ditentukan eksplisit.</li><li>Log tidak memuat secret/payload sensitif.</li></ul></div><div class="card"><h4>Operations</h4><ul><li>Migration canary dan audit artifact tersedia.</li><li>Worker process/alert/dashboard siap.</li><li>WA session volume persisten.</li><li>Rollback/forward-fix owner jelas.</li><li>Smoke test external API dan blast kecil selesai.</li></ul></div></div>
+    </section>
+
+    <section id="sources" data-searchable>
+      <div class="eyebrow">17 · Traceability</div><h2>Sumber kode dan dokumen</h2>
+      <p class="section-intro">Dokumentasi ini disusun dari implementasi pada commit/worktree lokal tanggal verifikasi. Saat perilaku berubah, update handbook bersama perubahan kode.</p>
+      <div class="grid two"><div class="card"><h3>Dokumen sumber</h3><ul><li><code>README.md</code></li><li><code>docs/tenant-schema-migration.md</code></li><li><code>docs/external-instance-api.md</code></li><li><code>docs/realtime-socket-migration.md</code></li></ul></div><div class="card"><h3>Implementasi kunci</h3><ul><li><code>services/blast/*</code>, <code>scripts/worker-*.ts</code></li><li><code>services/social/*</code>, <code>app/api/v1/**/instagram/*</code></li><li><code>services/tenant-schema/*</code>, <code>prisma/*</code></li><li><code>services/external/*</code>, <code>app/api/v1/external/*</code></li><li><code>wa-sevenlead/src/client-manager.ts</code> dan <code>src/services/*</code></li><li><code>realtime-socket-service/src/server.ts</code></li></ul></div></div>
+      <div class="callout ok"><strong>Maintenance rule:</strong> endpoint, state transition, worker default, migration command, dan security boundary harus diverifikasi terhadap kode—jangan memperbarui handbook berdasarkan asumsi.</div>
+    </section>
+    <footer>Sevenlead Engineering Handbook · Static, offline-friendly, no external asset dependency · Generated from the local implementation.</footer>
+  </div></main>
+</div>
+<script>
+  const root=document.documentElement, shell=document.getElementById('shell');
+  const saved=localStorage.getItem('sevenlead-doc-theme'); if(saved) root.dataset.theme=saved;
+  document.querySelectorAll('.theme-toggle').forEach(b=>b.addEventListener('click',()=>{root.dataset.theme=root.dataset.theme==='dark'?'light':'dark';localStorage.setItem('sevenlead-doc-theme',root.dataset.theme)}));
+  document.getElementById('menuButton').addEventListener('click',()=>shell.classList.toggle('menu-open'));
+  document.querySelectorAll('nav a').forEach(a=>a.addEventListener('click',()=>shell.classList.remove('menu-open')));
+  document.querySelectorAll('pre').forEach(pre=>{const b=document.createElement('button');b.className='copy';b.textContent='Copy';b.addEventListener('click',async()=>{await navigator.clipboard.writeText(pre.querySelector('code')?.innerText||pre.innerText);b.textContent='Copied';setTimeout(()=>b.textContent='Copy',1200)});pre.appendChild(b)});
+  const searchable=[...document.querySelectorAll('[data-searchable]')];
+  document.getElementById('search').addEventListener('input',e=>{const q=e.target.value.trim().toLowerCase();searchable.forEach(el=>el.classList.toggle('hidden-by-search',q && !el.innerText.toLowerCase().includes(q)))});
+  document.querySelectorAll('.filter').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));btn.classList.add('active');const kind=btn.dataset.filter;document.querySelectorAll('#endpointTable tbody tr').forEach(row=>row.style.display=kind==='all'||row.dataset.kind===kind?'':'none')}));
+  const sections=[...document.querySelectorAll('section[id],header[id]')], links=[...document.querySelectorAll('nav a')];
+  const observer=new IntersectionObserver(entries=>{const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];if(!visible)return;links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+visible.target.id))},{rootMargin:'-15% 0px -70% 0px',threshold:[0,.2,.5]});sections.forEach(s=>observer.observe(s));
+</script>
+</body>
+</html>
